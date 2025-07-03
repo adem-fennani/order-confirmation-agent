@@ -1,0 +1,304 @@
+# main.py - Order Confirmation Agent Core
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+import json
+import uuid
+from datetime import datetime
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+import re
+
+# Data Models
+class OrderItem(BaseModel):
+    name: str
+    quantity: int
+    price: float
+    notes: Optional[str] = None
+
+class Order(BaseModel):
+    id: str
+    customer_name: str
+    customer_phone: str
+    items: List[OrderItem]
+    total_amount: float
+    status: str = "pending"  # pending, confirmed, cancelled
+    created_at: str
+    confirmed_at: Optional[str] = None
+    notes: Optional[str] = None
+
+class ConversationState(BaseModel):
+    order_id: str
+    messages: List[Dict[str, str]]
+    current_step: str = "greeting"  # greeting, confirming_items, confirming_details, final_confirmation
+    confirmed_items: List[Dict] = []
+    issues_found: List[str] = []
+
+# Mock Database
+class MockDatabase:
+    def __init__(self):
+        self.orders: Dict[str, Order] = {}
+        self.conversations: Dict[str, ConversationState] = {}
+        self._load_sample_orders()
+    
+    def _load_sample_orders(self):
+        """Load some sample orders for testing"""
+        sample_orders = [
+            Order(
+                id="order_001",
+                customer_name="Marie Dubois",
+                customer_phone="+33123456789",
+                items=[
+                    OrderItem(name="Pizza Margherita", quantity=2, price=12.50),
+                    OrderItem(name="Coca-Cola", quantity=2, price=2.50)
+                ],
+                total_amount=30.00,
+                created_at=datetime.now().isoformat()
+            ),
+            Order(
+                id="order_002",
+                customer_name="Jean Martin",
+                customer_phone="+33987654321",
+                items=[
+                    OrderItem(name="Burger Classic", quantity=1, price=8.90),
+                    OrderItem(name="Frites", quantity=1, price=3.50),
+                    OrderItem(name="Milkshake Vanille", quantity=1, price=4.50)
+                ],
+                total_amount=16.90,
+                created_at=datetime.now().isoformat()
+            )
+        ]
+        
+        for order in sample_orders:
+            self.orders[order.id] = order
+    
+    def get_order(self, order_id: str) -> Optional[Order]:
+        return self.orders.get(order_id)
+    
+    def update_order(self, order_id: str, updates: Dict[str, Any]) -> bool:
+        if order_id in self.orders:
+            for key, value in updates.items():
+                if hasattr(self.orders[order_id], key):
+                    setattr(self.orders[order_id], key, value)
+            return True
+        return False
+    
+    def get_conversation(self, order_id: str) -> Optional[ConversationState]:
+        return self.conversations.get(order_id)
+    
+    def update_conversation(self, order_id: str, conversation: ConversationState):
+        self.conversations[order_id] = conversation
+
+# Order Confirmation Agent
+class OrderConfirmationAgent:
+    def __init__(self, db: MockDatabase):
+        self.db = db
+        self.prompt_template = ChatPromptTemplate.from_messages([
+            ("system", """Tu es un agent de confirmation de commande professionnel et sympathique. 
+            Ton rôle est de confirmer les détails d'une commande avec le client.
+            
+            Règles importantes:
+            - Sois poli et professionnel
+            - Reformule clairement les détails de la commande
+            - Pose des questions de clarification si nécessaire
+            - Confirme chaque élément un par un si la commande est complexe
+            - Demande confirmation finale avant de valider
+            - Si le client veut modifier quelque chose, note-le clairement
+            
+            Contexte de la commande:
+            {order_context}
+            
+            Étape actuelle: {current_step}
+            Historique de conversation: {conversation_history}
+            """),
+            ("human", "{user_input}")
+        ])
+    
+    def process_message(self, order_id: str, user_input: str) -> str:
+        """Process a message from the user and return agent response"""
+        
+        # Get order details
+        order = self.db.get_order(order_id)
+        if not order:
+            return "Désolé, je ne trouve pas cette commande. Pouvez-vous vérifier le numéro de commande?"
+        
+        # Get or create conversation state
+        conversation = self.db.get_conversation(order_id)
+        if not conversation:
+            conversation = ConversationState(
+                order_id=order_id,
+                messages=[],
+                current_step="greeting"
+            )
+        
+        # Add user message to conversation
+        conversation.messages.append({"role": "user", "content": user_input})
+        
+        # Prepare context
+        order_context = self._format_order_context(order)
+        conversation_history = self._format_conversation_history(conversation.messages)
+        
+        # Determine next step and generate response
+        response = self._generate_response(
+            order_context, 
+            conversation.current_step, 
+            conversation_history, 
+            user_input
+        )
+        
+        # Update conversation state
+        conversation.messages.append({"role": "assistant", "content": response})
+        conversation.current_step = self._determine_next_step(conversation.current_step, user_input, response)
+        
+        # Save conversation
+        self.db.update_conversation(order_id, conversation)
+        
+        return response
+    
+    def _format_order_context(self, order: Order) -> str:
+        items_str = "\n".join([
+            f"- {item.name} x{item.quantity} ({item.price}€ chacun)" 
+            for item in order.items
+        ])
+        
+        return f"""
+        Commande ID: {order.id}
+        Client: {order.customer_name}
+        Téléphone: {order.customer_phone}
+        Articles:
+        {items_str}
+        Total: {order.total_amount}€
+        Statut: {order.status}
+        """
+    
+    def _format_conversation_history(self, messages: List[Dict[str, str]]) -> str:
+        if not messages:
+            return "Pas d'historique"
+        
+        history = []
+        for msg in messages[-4:]:  # Keep last 4 messages for context
+            role = "Client" if msg["role"] == "user" else "Agent"
+            history.append(f"{role}: {msg['content']}")
+        
+        return "\n".join(history)
+    
+    def _generate_response(self, order_context: str, current_step: str, 
+                          conversation_history: str, user_input: str) -> str:
+        """Generate response based on current context"""
+        
+        # Simple rule-based responses for demo
+        # In a real implementation, you'd use LangChain with LLM
+        
+        if current_step == "greeting":
+            return f"Bonjour ! Je vous appelle pour confirmer votre commande. {order_context.split('Articles:')[1].split('Total:')[0]} pour un total de {order_context.split('Total: ')[1].split('€')[0]}€. Est-ce que ces informations sont correctes ?"
+        
+        elif current_step == "confirming_items":
+            if any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
+                return "Parfait ! Pouvez-vous me confirmer votre nom et votre adresse de livraison ?"
+            elif any(word in user_input.lower() for word in ["non", "incorrect", "erreur", "changer"]):
+                return "Pas de problème ! Pouvez-vous me dire ce qui doit être modifié dans votre commande ?"
+            else:
+                return "Je ne suis pas sûr de comprendre. Pouvez-vous me dire si les articles de votre commande sont corrects ?"
+        
+        elif current_step == "confirming_details":
+            return "Merci pour ces informations. Je récapitule : votre commande sera livrée sous 30 minutes. Confirmez-vous cette commande ?"
+        
+        elif current_step == "final_confirmation":
+            if any(word in user_input.lower() for word in ["oui", "confirme", "ok", "d'accord"]):
+                return "Parfait ! Votre commande est confirmée. Vous recevrez un SMS de confirmation. Merci et à bientôt !"
+            else:
+                return "Très bien, votre commande est annulée. N'hésitez pas à nous recontacter. Bonne journée !"
+        
+        return "Je ne suis pas sûr de comprendre. Pouvez-vous répéter ?"
+    
+    def _determine_next_step(self, current_step: str, user_input: str, response: str) -> str:
+        """Determine the next step in the conversation"""
+        
+        step_transitions = {
+            "greeting": "confirming_items",
+            "confirming_items": "confirming_details",
+            "confirming_details": "final_confirmation",
+            "final_confirmation": "completed"
+        }
+        
+        # Simple logic - in practice, you'd analyze the conversation more carefully
+        if current_step in step_transitions:
+            return step_transitions[current_step]
+        
+        return current_step
+
+# FastAPI App
+app = FastAPI(title="Order Confirmation Agent API", version="1.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5500"],  # You can use ["*"] for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+db = MockDatabase()
+agent = OrderConfirmationAgent(db)
+
+@app.get("/")
+async def root():
+    return {"message": "Order Confirmation Agent API"}
+
+@app.get("/orders")
+async def get_orders():
+    """Get all orders"""
+    return {"orders": list(db.orders.values())}
+
+@app.get("/orders/{order_id}")
+async def get_order(order_id: str):
+    """Get specific order"""
+    order = db.get_order(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"order": order}
+
+@app.post("/orders/{order_id}/confirm")
+async def start_confirmation(order_id: str):
+    """Start confirmation process for an order"""
+    order = db.get_order(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Start conversation
+    initial_response = agent.process_message(order_id, "Bonjour")
+    
+    return {
+        "order_id": order_id,
+        "message": initial_response,
+        "status": "confirmation_started"
+    }
+
+@app.post("/orders/{order_id}/message")
+async def send_message(order_id: str, message: dict):
+    """Send a message to the agent"""
+    user_input = message.get("text", "")
+    
+    if not user_input:
+        raise HTTPException(status_code=400, detail="Message text is required")
+    
+    response = agent.process_message(order_id, user_input)
+    
+    return {
+        "order_id": order_id,
+        "user_message": user_input,
+        "agent_response": response
+    }
+
+@app.get("/orders/{order_id}/conversation")
+async def get_conversation(order_id: str):
+    """Get conversation history"""
+    conversation = db.get_conversation(order_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    return {"conversation": conversation}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
