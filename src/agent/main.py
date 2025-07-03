@@ -1,4 +1,7 @@
 # main.py - Order Confirmation Agent Core
+import json
+from src.agent.database.sqlite import SQLiteDatabase
+from src.agent.database.models import OrderModel
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -238,7 +241,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-db = MockDatabase()
+db = SQLiteDatabase()
 agent = OrderConfirmationAgent(db)
 
 @app.get("/")
@@ -247,16 +250,57 @@ async def root():
 
 @app.get("/orders")
 async def get_orders():
-    """Get all orders"""
-    return {"orders": list(db.orders.values())}
+    """Get all orders with complete structure"""
+    db = SQLiteDatabase()
+    orders = []
+    with db.Session() as session:
+        db_orders = session.query(OrderModel).all()
+        for order in db_orders:
+            orders.append({
+                "id": order.id,
+                "customer_name": order.customer_name,
+                "customer_phone": order.customer_phone,
+                "items": [{
+                    "name": item["name"],
+                    "quantity": item["quantity"],
+                    "price": item["price"],
+                    "notes": item.get("notes")
+                } for item in json.loads(order.items)],
+                "total_amount": order.total_amount,
+                "status": order.status,
+                "created_at": order.created_at,
+                "confirmed_at": order.confirmed_at,
+                "notes": order.notes
+            })
+    return {"orders": orders}
 
 @app.get("/orders/{order_id}")
 async def get_order(order_id: str):
-    """Get specific order"""
-    order = db.get_order(order_id)
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return {"order": order}
+    """Get specific order with complete structure"""
+    db = SQLiteDatabase()
+    with db.Session() as session:
+        order = session.query(OrderModel).filter_by(id=order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        return {
+            "order": {
+                "id": order.id,
+                "customer_name": order.customer_name,
+                "customer_phone": order.customer_phone,
+                "items": [{
+                    "name": item["name"],
+                    "quantity": item["quantity"],
+                    "price": item["price"],
+                    "notes": item.get("notes")
+                } for item in json.loads(order.items)],
+                "total_amount": order.total_amount,
+                "status": order.status,
+                "created_at": order.created_at,
+                "confirmed_at": order.confirmed_at,
+                "notes": order.notes
+            }
+        }
 
 @app.post("/orders/{order_id}/confirm")
 async def start_confirmation(order_id: str):

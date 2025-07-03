@@ -1,0 +1,6 @@
+README.md
+setup.py
+order_confirmation_agent.egg-info/PKG-INFO
+order_confirmation_agent.egg-info/SOURCES.txt
+order_confirmation_agent.egg-info/dependency_links.txt
+order_confirmation_agent.egg-info/top_level.txt
