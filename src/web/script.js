@@ -10,11 +10,29 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const errorMessage = document.getElementById('error-message');
 
+// Global form submit event listener for debugging
+// This will log and prevent any form submission anywhere in the app
+// Place this at the top of the script
+
+document.addEventListener('submit', function(e) {
+    console.log('A form submit event was triggered!', e.target);
+    e.preventDefault();
+});
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     loadOrders();
     setupEventListeners();
     setupAddOrderForm();
+
+    // Prevent accidental form submission in chat input area
+    document.querySelectorAll('.chat-input input, .chat-input button').forEach(el => {
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+    });
 });
 
 function setupEventListeners() {
@@ -25,22 +43,30 @@ function setupEventListeners() {
         }
     });
 
-    sendButton.addEventListener('click', sendMessage);
+    sendButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        sendMessage();
+    });
 }
 
 function setupAddOrderForm() {
     const showBtn = document.getElementById('show-add-order');
     const form = document.getElementById('add-order-form');
     const cancelBtn = document.getElementById('cancel-add-order');
-    showBtn.addEventListener('click', function() {
+    
+    showBtn.addEventListener('click', function(e) {
+        e.preventDefault();
         form.style.display = 'block';
         showBtn.style.display = 'none';
     });
-    cancelBtn.addEventListener('click', function() {
+    
+    cancelBtn.addEventListener('click', function(e) {
+        e.preventDefault();
         form.style.display = 'none';
         showBtn.style.display = 'block';
         form.reset && form.reset();
     });
+    
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
         const name = document.getElementById('add-customer-name').value.trim();
@@ -48,20 +74,24 @@ function setupAddOrderForm() {
         const itemsRaw = document.getElementById('add-items').value.trim();
         const total = parseFloat(document.getElementById('add-total-amount').value);
         const notes = document.getElementById('add-notes').value.trim();
+        
         if (!name || !phone || !itemsRaw || isNaN(total)) {
             showError('Veuillez remplir tous les champs obligatoires');
             return;
         }
+        
         // Parse items: format "Pizza x2 12.5; Cola x1 2.5"
         const items = itemsRaw.split(';').map(str => {
             const m = str.trim().match(/^(.+?) x(\d+) ([\d.]+)$/);
             if (!m) return null;
             return { name: m[1].trim(), quantity: parseInt(m[2]), price: parseFloat(m[3]) };
         }).filter(Boolean);
+        
         if (items.length === 0) {
             showError('Format des articles invalide');
             return;
         }
+        
         try {
             const resp = await fetch(`${API_BASE}/orders`, {
                 method: 'POST',
@@ -121,14 +151,14 @@ function displayOrders(orders) {
             </div>
             <div class="order-total">${order.total_amount}€</div>
             <div class="order-actions" style="flex-direction:column;gap:6px;">
-                <button class="start-confirmation order-action-btn" style="width:100%;font-size:1rem;font-weight:700;" title="Démarrer conversation" onclick="startConfirmation('${order.id}')">
+                <button class="start-confirmation order-action-btn" type="button" style="width:100%;font-size:1rem;font-weight:700;" title="Démarrer conversation" data-order-id="${order.id}">
                     Démarrer conversation
                 </button>
                 <div style="display:flex;gap:8px;">
-                    <button class="update-order-btn order-action-btn" data-order-id="${order.id}" title="Mettre à jour">
+                    <button class="update-order-btn order-action-btn" type="button" data-order-id="${order.id}" title="Mettre à jour">
                         <span>✏️</span>
                     </button>
-                    <button class="delete-order-btn order-action-btn" data-order-id="${order.id}" title="Supprimer">
+                    <button class="delete-order-btn order-action-btn" type="button" data-order-id="${order.id}" title="Supprimer">
                         <span>🗑️</span>
                     </button>
                 </div>
@@ -139,16 +169,35 @@ function displayOrders(orders) {
     // Add click listeners to order cards
     document.querySelectorAll('.order-card').forEach(card => {
         card.addEventListener('click', function(e) {
-            if (e.target.classList.contains('start-confirmation') || e.target.classList.contains('delete-order-btn')) {
+            // Prevent bubbling from button clicks
+            if (
+                e.target.classList.contains('start-confirmation') ||
+                e.target.classList.contains('delete-order-btn') ||
+                e.target.classList.contains('update-order-btn') ||
+                e.target.closest('button')
+            ) {
+                e.preventDefault();
+                e.stopPropagation();
                 return; // Let the button handle this
             }
             selectOrder(this.dataset.orderId);
         });
     });
 
+    // Add start confirmation listeners
+    document.querySelectorAll('.order-card .start-confirmation').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const orderId = this.dataset.orderId;
+            startConfirmation(orderId);
+        });
+    });
+
     // Add delete listeners
     document.querySelectorAll('.delete-order-btn').forEach(btn => {
         btn.addEventListener('click', async function(e) {
+            e.preventDefault();
             e.stopPropagation();
             const orderId = this.dataset.orderId;
             if (confirm('Voulez-vous vraiment supprimer cette commande ?')) {
@@ -168,11 +217,14 @@ function displayOrders(orders) {
             }
         });
     });
+
     // Add update listeners
     document.querySelectorAll('.update-order-btn').forEach(btn => {
         btn.addEventListener('click', async function(e) {
+            e.preventDefault();
             e.stopPropagation();
             const orderId = this.dataset.orderId;
+            
             // Fetch order details
             let order = null;
             try {
@@ -184,6 +236,7 @@ function displayOrders(orders) {
                 showError('Erreur lors du chargement de la commande');
                 return;
             }
+            
             // Show prompt for each field (simple version)
             const customer_name = prompt('Nom du client:', order.customer_name);
             if (customer_name === null) return;
@@ -195,16 +248,19 @@ function displayOrders(orders) {
             if (total_amount === null) return;
             const notes = prompt('Notes (optionnel):', order.notes || '');
             if (notes === null) return;
+            
             // Parse items
             const items = itemsRaw.split(';').map(str => {
                 const m = str.trim().match(/^(.+?) x(\d+) ([\d.]+)$/);
                 if (!m) return null;
                 return { name: m[1].trim(), quantity: parseInt(m[2]), price: parseFloat(m[3]) };
             }).filter(Boolean);
+            
             if (items.length === 0) {
                 showError('Format des articles invalide');
                 return;
             }
+            
             // Send update
             try {
                 const resp = await fetch(`${API_BASE}/orders/${orderId}`, {
@@ -247,6 +303,7 @@ function selectOrder(orderId) {
 }
 
 async function startConfirmation(orderId) {
+    console.log('startConfirmation called', orderId);
     try {
         isLoading = true;
         sendButton.disabled = true;
@@ -315,10 +372,13 @@ function addMessage(text, sender) {
 }
 
 async function sendMessage() {
+    console.log('sendMessage called');
     if (!currentOrderId || isLoading) return;
     
     const text = messageInput.value.trim();
     if (!text) return;
+
+    console.log('before fetch');
     
     try {
         isLoading = true;
@@ -336,6 +396,8 @@ async function sendMessage() {
             },
             body: JSON.stringify({ text })
         });
+
+        console.log('after fetch');
         
         const data = await response.json();
         

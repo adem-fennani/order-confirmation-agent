@@ -4,6 +4,7 @@ from src.agent.database.sqlite import SQLiteDatabase
 from src.agent.database.models import OrderModel
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, validator
 from typing import List, Optional, Dict, Any
 import uuid
@@ -12,6 +13,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import re
+from fastapi.staticfiles import StaticFiles
+import os
 
 # Data Models
 class OrderItem(BaseModel):
@@ -178,19 +181,26 @@ class OrderConfirmationAgent:
 
 # FastAPI App
 app = FastAPI(title="Order Confirmation Agent API", version="1.0.0")
+
+# Serve static files from the 'src/web' directory at /static
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "../web"), html=True), name="static")
+
+# Redirect / to /static/index.html
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/static/index.html")
+
+# CORS: allow frontend served from same origin (localhost:8000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5500"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 db = SQLiteDatabase()
 agent = OrderConfirmationAgent(db)
-
-@app.get("/")
-async def root():
-    return {"message": "Order Confirmation Agent API"}
 
 @app.get("/orders")
 async def get_orders():
