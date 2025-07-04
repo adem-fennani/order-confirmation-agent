@@ -123,16 +123,40 @@ function displayOrders(orders) {
             <button class="start-confirmation" onclick="startConfirmation('${order.id}')">
                 Démarrer confirmation
             </button>
+            <button class="delete-order-btn" data-order-id="${order.id}" style="background:#ff5252;color:#fff;margin-top:8px;width:100%;border:none;border-radius:8px;padding:10px;font-weight:bold;cursor:pointer;">Supprimer</button>
         </div>
     `).join('');
 
     // Add click listeners to order cards
     document.querySelectorAll('.order-card').forEach(card => {
         card.addEventListener('click', function(e) {
-            if (e.target.classList.contains('start-confirmation')) {
+            if (e.target.classList.contains('start-confirmation') || e.target.classList.contains('delete-order-btn')) {
                 return; // Let the button handle this
             }
             selectOrder(this.dataset.orderId);
+        });
+    });
+
+    // Add delete listeners
+    document.querySelectorAll('.delete-order-btn').forEach(btn => {
+        btn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            const orderId = this.dataset.orderId;
+            if (confirm('Voulez-vous vraiment supprimer cette commande ?')) {
+                try {
+                    const resp = await fetch(`${API_BASE}/orders/${orderId}`, { method: 'DELETE' });
+                    if (!resp.ok) throw new Error('Erreur API');
+                    loadOrders();
+                    if (currentOrderId === orderId) {
+                        chatMessages.innerHTML = `<div class="empty-state"><h3>Aucune conversation active</h3><p>Sélectionnez une commande dans la liste de gauche pour démarrer une confirmation.</p></div>`;
+                        chatTitle.textContent = 'Sélectionnez une commande pour démarrer';
+                        messageInput.disabled = true;
+                        sendButton.disabled = true;
+                    }
+                } catch (err) {
+                    showError('Erreur lors de la suppression de la commande');
+                }
+            }
         });
     });
 }

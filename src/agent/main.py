@@ -327,6 +327,19 @@ async def create_order(order: CreateOrder):
         session.commit()
     return {"id": order_id, "status": "created"}
 
+@app.delete("/orders/{order_id}")
+async def delete_order(order_id: str):
+    """Delete an order from the database by ID"""
+    with db.Session() as session:
+        order = session.query(OrderModel).filter_by(id=order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        session.delete(order)
+        session.commit()
+    # Optionally, also delete conversation if you store it elsewhere
+    db.delete_conversation(order_id) if hasattr(db, 'delete_conversation') else None
+    return {"id": order_id, "status": "deleted"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
