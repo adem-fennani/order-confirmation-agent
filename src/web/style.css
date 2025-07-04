@@ -61,9 +61,12 @@ body {
     border: 1px solid #e9ecef;
     border-radius: 10px;
     padding: 15px;
-    margin-bottom: 15px;
+    margin-bottom: 24px;
     cursor: pointer;
     transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .order-card:hover {
@@ -363,4 +366,58 @@ body {
 .alt-btn:hover {
     background: #0d47a1 !important;
     box-shadow: 0 4px 16px rgba(25,118,210,0.15);
+}
+
+.order-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: flex-end;
+}
+
+.order-action-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 0;
+    border: none;
+    border-radius: 6px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    background: #f4f6fb;
+    color: #1976d2;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.order-action-btn span {
+    font-size: 1.2em;
+}
+.order-action-btn:hover {
+    background: #e3f2fd;
+    color: #0d47a1;
+}
+.order-action-btn.start-confirmation {
+    background: #00b4d8;
+    color: #1976d2;
+    font-weight: 700;
+}
+.order-action-btn.start-confirmation:hover {
+    background: #1976d2;
+    color: #fff;
+}
+.order-action-btn.update-order-btn {
+    background: #ffb300;
+    color: #fff;
+}
+.order-action-btn.update-order-btn:hover {
+    background: #ff9800;
+}
+.order-action-btn.delete-order-btn {
+    background: #ff5252;
+    color: #fff;
+}
+.order-action-btn.delete-order-btn:hover {
+    background: #d32f2f;
 }

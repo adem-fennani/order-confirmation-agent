@@ -2,7 +2,7 @@
 import json
 from src.agent.database.sqlite import SQLiteDatabase
 from src.agent.database.models import OrderModel
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
 from typing import List, Optional, Dict, Any
@@ -339,6 +339,23 @@ async def delete_order(order_id: str):
     # Optionally, also delete conversation if you store it elsewhere
     db.delete_conversation(order_id) if hasattr(db, 'delete_conversation') else None
     return {"id": order_id, "status": "deleted"}
+
+@app.put("/orders/{order_id}")
+async def update_order(order_id: str, order: dict = Body(...)):
+    """Update an order in the database by ID"""
+    with db.Session() as session:
+        db_order = session.query(OrderModel).filter_by(id=order_id).first()
+        if not db_order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        # Update fields
+        db_order.customer_name = order.get("customer_name", db_order.customer_name)
+        db_order.customer_phone = order.get("customer_phone", db_order.customer_phone)
+        db_order.items = order.get("items", db_order.items)
+        db_order.total_amount = order.get("total_amount", db_order.total_amount)
+        db_order.status = order.get("status", db_order.status)
+        db_order.notes = order.get("notes", db_order.notes)
+        session.commit()
+    return {"id": order_id, "status": "updated"}
 
 if __name__ == "__main__":
     import uvicorn

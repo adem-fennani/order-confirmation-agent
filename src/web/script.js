@@ -120,10 +120,19 @@ function displayOrders(orders) {
                 `).join('')}
             </div>
             <div class="order-total">${order.total_amount}€</div>
-            <button class="start-confirmation" onclick="startConfirmation('${order.id}')">
-                Démarrer confirmation
-            </button>
-            <button class="delete-order-btn" data-order-id="${order.id}" style="background:#ff5252;color:#fff;margin-top:8px;width:100%;border:none;border-radius:8px;padding:10px;font-weight:bold;cursor:pointer;">Supprimer</button>
+            <div class="order-actions" style="flex-direction:column;gap:6px;">
+                <button class="start-confirmation order-action-btn" style="width:100%;font-size:1rem;font-weight:700;" title="Démarrer conversation" onclick="startConfirmation('${order.id}')">
+                    Démarrer conversation
+                </button>
+                <div style="display:flex;gap:8px;">
+                    <button class="update-order-btn order-action-btn" data-order-id="${order.id}" title="Mettre à jour">
+                        <span>✏️</span>
+                    </button>
+                    <button class="delete-order-btn order-action-btn" data-order-id="${order.id}" title="Supprimer">
+                        <span>🗑️</span>
+                    </button>
+                </div>
+            </div>
         </div>
     `).join('');
 
@@ -156,6 +165,63 @@ function displayOrders(orders) {
                 } catch (err) {
                     showError('Erreur lors de la suppression de la commande');
                 }
+            }
+        });
+    });
+    // Add update listeners
+    document.querySelectorAll('.update-order-btn').forEach(btn => {
+        btn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            const orderId = this.dataset.orderId;
+            // Fetch order details
+            let order = null;
+            try {
+                const resp = await fetch(`${API_BASE}/orders/${orderId}`);
+                if (!resp.ok) throw new Error('Erreur API');
+                const data = await resp.json();
+                order = data.order;
+            } catch (err) {
+                showError('Erreur lors du chargement de la commande');
+                return;
+            }
+            // Show prompt for each field (simple version)
+            const customer_name = prompt('Nom du client:', order.customer_name);
+            if (customer_name === null) return;
+            const customer_phone = prompt('Téléphone:', order.customer_phone);
+            if (customer_phone === null) return;
+            const itemsRaw = prompt('Articles (ex: Pizza x2 12.5; Cola x1 2.5):', order.items.map(i => `${i.name} x${i.quantity} ${i.price}`).join('; '));
+            if (itemsRaw === null) return;
+            const total_amount = prompt('Total (€):', order.total_amount);
+            if (total_amount === null) return;
+            const notes = prompt('Notes (optionnel):', order.notes || '');
+            if (notes === null) return;
+            // Parse items
+            const items = itemsRaw.split(';').map(str => {
+                const m = str.trim().match(/^(.+?) x(\d+) ([\d.]+)$/);
+                if (!m) return null;
+                return { name: m[1].trim(), quantity: parseInt(m[2]), price: parseFloat(m[3]) };
+            }).filter(Boolean);
+            if (items.length === 0) {
+                showError('Format des articles invalide');
+                return;
+            }
+            // Send update
+            try {
+                const resp = await fetch(`${API_BASE}/orders/${orderId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer_name,
+                        customer_phone,
+                        items,
+                        total_amount: parseFloat(total_amount),
+                        notes: notes || undefined
+                    })
+                });
+                if (!resp.ok) throw new Error('Erreur API');
+                loadOrders();
+            } catch (err) {
+                showError('Erreur lors de la mise à jour de la commande');
             }
         });
     });
