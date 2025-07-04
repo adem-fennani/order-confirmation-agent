@@ -14,6 +14,7 @@ const errorMessage = document.getElementById('error-message');
 document.addEventListener('DOMContentLoaded', function() {
     loadOrders();
     setupEventListeners();
+    setupAddOrderForm();
 });
 
 function setupEventListeners() {
@@ -25,6 +26,63 @@ function setupEventListeners() {
     });
 
     sendButton.addEventListener('click', sendMessage);
+}
+
+function setupAddOrderForm() {
+    const showBtn = document.getElementById('show-add-order');
+    const form = document.getElementById('add-order-form');
+    const cancelBtn = document.getElementById('cancel-add-order');
+    showBtn.addEventListener('click', function() {
+        form.style.display = 'block';
+        showBtn.style.display = 'none';
+    });
+    cancelBtn.addEventListener('click', function() {
+        form.style.display = 'none';
+        showBtn.style.display = 'block';
+        form.reset && form.reset();
+    });
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const name = document.getElementById('add-customer-name').value.trim();
+        const phone = document.getElementById('add-customer-phone').value.trim();
+        const itemsRaw = document.getElementById('add-items').value.trim();
+        const total = parseFloat(document.getElementById('add-total-amount').value);
+        const notes = document.getElementById('add-notes').value.trim();
+        if (!name || !phone || !itemsRaw || isNaN(total)) {
+            showError('Veuillez remplir tous les champs obligatoires');
+            return;
+        }
+        // Parse items: format "Pizza x2 12.5; Cola x1 2.5"
+        const items = itemsRaw.split(';').map(str => {
+            const m = str.trim().match(/^(.+?) x(\d+) ([\d.]+)$/);
+            if (!m) return null;
+            return { name: m[1].trim(), quantity: parseInt(m[2]), price: parseFloat(m[3]) };
+        }).filter(Boolean);
+        if (items.length === 0) {
+            showError('Format des articles invalide');
+            return;
+        }
+        try {
+            const resp = await fetch(`${API_BASE}/orders`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customer_name: name,
+                    customer_phone: phone,
+                    items,
+                    total_amount: total,
+                    notes: notes || undefined
+                })
+            });
+            if (!resp.ok) throw new Error('Erreur API');
+            form.style.display = 'none';
+            showBtn.style.display = 'block';
+            form.reset && form.reset();
+            loadOrders();
+        } catch (err) {
+            showError('Erreur lors de l\'ajout de la commande');
+        }
+    });
 }
 
 async function loadOrders() {

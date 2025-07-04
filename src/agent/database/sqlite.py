@@ -52,11 +52,17 @@ class SQLiteDatabase(DatabaseInterface):
         with self.Session() as session:
             order = session.query(OrderModel).filter_by(id=order_id).first()
             if order:
+                items = order.items
+                if isinstance(items, str):
+                    try:
+                        items = json.loads(items)
+                    except Exception:
+                        items = []
                 return {
                     "id": order.id,
                     "customer_name": order.customer_name,
                     "customer_phone": order.customer_phone,
-                    "items": json.loads(order.items),
+                    "items": items,
                     "total_amount": order.total_amount,
                     "status": order.status,
                     "created_at": order.created_at.isoformat(),

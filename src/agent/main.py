@@ -4,9 +4,8 @@ from src.agent.database.sqlite import SQLiteDatabase
 from src.agent.database.models import OrderModel
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import List, Optional, Dict, Any
-import json
 import uuid
 from datetime import datetime
 from langchain_core.messages import HumanMessage, AIMessage
@@ -32,6 +31,12 @@ class Order(BaseModel):
     confirmed_at: Optional[str] = None
     notes: Optional[str] = None
 
+    @validator('items', pre=True)
+    def parse_items(cls, v):
+        if isinstance(v, str):
+            return [OrderItem(**item) for item in json.loads(v)]
+        return v
+
 class ConversationState(BaseModel):
     order_id: str
     messages: List[Dict[str, str]]
@@ -39,64 +44,9 @@ class ConversationState(BaseModel):
     confirmed_items: List[Dict] = []
     issues_found: List[str] = []
 
-# Mock Database
-class MockDatabase:
-    def __init__(self):
-        self.orders: Dict[str, Order] = {}
-        self.conversations: Dict[str, ConversationState] = {}
-        self._load_sample_orders()
-    
-    def _load_sample_orders(self):
-        """Load some sample orders for testing"""
-        sample_orders = [
-            Order(
-                id="order_001",
-                customer_name="Marie Dubois",
-                customer_phone="+33123456789",
-                items=[
-                    OrderItem(name="Pizza Margherita", quantity=2, price=12.50),
-                    OrderItem(name="Coca-Cola", quantity=2, price=2.50)
-                ],
-                total_amount=30.00,
-                created_at=datetime.now().isoformat()
-            ),
-            Order(
-                id="order_002",
-                customer_name="Jean Martin",
-                customer_phone="+33987654321",
-                items=[
-                    OrderItem(name="Burger Classic", quantity=1, price=8.90),
-                    OrderItem(name="Frites", quantity=1, price=3.50),
-                    OrderItem(name="Milkshake Vanille", quantity=1, price=4.50)
-                ],
-                total_amount=16.90,
-                created_at=datetime.now().isoformat()
-            )
-        ]
-        
-        for order in sample_orders:
-            self.orders[order.id] = order
-    
-    def get_order(self, order_id: str) -> Optional[Order]:
-        return self.orders.get(order_id)
-    
-    def update_order(self, order_id: str, updates: Dict[str, Any]) -> bool:
-        if order_id in self.orders:
-            for key, value in updates.items():
-                if hasattr(self.orders[order_id], key):
-                    setattr(self.orders[order_id], key, value)
-            return True
-        return False
-    
-    def get_conversation(self, order_id: str) -> Optional[ConversationState]:
-        return self.conversations.get(order_id)
-    
-    def update_conversation(self, order_id: str, conversation: ConversationState):
-        self.conversations[order_id] = conversation
-
 # Order Confirmation Agent
 class OrderConfirmationAgent:
-    def __init__(self, db: MockDatabase):
+    def __init__(self, db: SQLiteDatabase): 
         self.db = db
         self.prompt_template = ChatPromptTemplate.from_messages([
             ("system", """Tu es un agent de confirmation de commande professionnel et sympathique. 
@@ -121,20 +71,24 @@ class OrderConfirmationAgent:
     
     def process_message(self, order_id: str, user_input: str) -> str:
         """Process a message from the user and return agent response"""
-        
-        # Get order details
-        order = self.db.get_order(order_id)
-        if not order:
+        # Get order details from SQLite
+        order_data = self.db.get_order(order_id)
+        if not order_data:
             return "Désolé, je ne trouve pas cette commande. Pouvez-vous vérifier le numéro de commande?"
         
+        # Convert to Pydantic model
+        order = Order(**order_data)
+        
         # Get or create conversation state
-        conversation = self.db.get_conversation(order_id)
-        if not conversation:
+        conversation_data = self.db.get_conversation(order_id)
+        if not conversation_data:
             conversation = ConversationState(
                 order_id=order_id,
                 messages=[],
                 current_step="greeting"
             )
+        else:
+            conversation = ConversationState(**conversation_data)
         
         # Add user message to conversation
         conversation.messages.append({"role": "user", "content": user_input})
@@ -155,8 +109,8 @@ class OrderConfirmationAgent:
         conversation.messages.append({"role": "assistant", "content": response})
         conversation.current_step = self._determine_next_step(conversation.current_step, user_input, response)
         
-        # Save conversation
-        self.db.update_conversation(order_id, conversation)
+        # Save conversation back to SQLite
+        self.db.update_conversation(order_id, conversation.dict())
         
         return response
     
@@ -191,9 +145,6 @@ class OrderConfirmationAgent:
                           conversation_history: str, user_input: str) -> str:
         """Generate response based on current context"""
         
-        # Simple rule-based responses for demo
-        # In a real implementation, you'd use LangChain with LLM
-        
         if current_step == "greeting":
             return f"Bonjour ! Je vous appelle pour confirmer votre commande. {order_context.split('Articles:')[1].split('Total:')[0]} pour un total de {order_context.split('Total: ')[1].split('€')[0]}€. Est-ce que ces informations sont correctes ?"
         
@@ -217,26 +168,19 @@ class OrderConfirmationAgent:
         return "Je ne suis pas sûr de comprendre. Pouvez-vous répéter ?"
     
     def _determine_next_step(self, current_step: str, user_input: str, response: str) -> str:
-        """Determine the next step in the conversation"""
-        
         step_transitions = {
             "greeting": "confirming_items",
             "confirming_items": "confirming_details",
             "confirming_details": "final_confirmation",
             "final_confirmation": "completed"
         }
-        
-        # Simple logic - in practice, you'd analyze the conversation more carefully
-        if current_step in step_transitions:
-            return step_transitions[current_step]
-        
-        return current_step
+        return step_transitions.get(current_step, current_step)
 
 # FastAPI App
 app = FastAPI(title="Order Confirmation Agent API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5500"],  # You can use ["*"] for development
+    allow_origins=["http://127.0.0.1:5500"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -251,21 +195,21 @@ async def root():
 @app.get("/orders")
 async def get_orders():
     """Get all orders with complete structure"""
-    db = SQLiteDatabase()
     orders = []
     with db.Session() as session:
         db_orders = session.query(OrderModel).all()
         for order in db_orders:
+            items = order.items
+            if isinstance(items, str):
+                try:
+                    items = json.loads(items)
+                except Exception:
+                    items = []
             orders.append({
                 "id": order.id,
                 "customer_name": order.customer_name,
                 "customer_phone": order.customer_phone,
-                "items": [{
-                    "name": item["name"],
-                    "quantity": item["quantity"],
-                    "price": item["price"],
-                    "notes": item.get("notes")
-                } for item in json.loads(order.items)],
+                "items": items,
                 "total_amount": order.total_amount,
                 "status": order.status,
                 "created_at": order.created_at,
@@ -277,23 +221,22 @@ async def get_orders():
 @app.get("/orders/{order_id}")
 async def get_order(order_id: str):
     """Get specific order with complete structure"""
-    db = SQLiteDatabase()
     with db.Session() as session:
         order = session.query(OrderModel).filter_by(id=order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        
+        items = order.items
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = []
         return {
             "order": {
                 "id": order.id,
                 "customer_name": order.customer_name,
                 "customer_phone": order.customer_phone,
-                "items": [{
-                    "name": item["name"],
-                    "quantity": item["quantity"],
-                    "price": item["price"],
-                    "notes": item.get("notes")
-                } for item in json.loads(order.items)],
+                "items": items,
                 "total_amount": order.total_amount,
                 "status": order.status,
                 "created_at": order.created_at,
@@ -305,13 +248,29 @@ async def get_order(order_id: str):
 @app.post("/orders/{order_id}/confirm")
 async def start_confirmation(order_id: str):
     """Start confirmation process for an order"""
-    order = db.get_order(order_id)
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
+    with db.Session() as session:
+        order = session.query(OrderModel).filter_by(id=order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        items = order.items
+        if isinstance(items, str):
+            try:
+                items = json.loads(items)
+            except Exception:
+                items = []
+        order_data = {
+            "id": order.id,
+            "customer_name": order.customer_name,
+            "customer_phone": order.customer_phone,
+            "items": items,
+            "total_amount": order.total_amount,
+            "status": order.status,
+            "created_at": order.created_at,
+            "confirmed_at": order.confirmed_at,
+            "notes": order.notes
+        }
     # Start conversation
     initial_response = agent.process_message(order_id, "Bonjour")
-    
     return {
         "order_id": order_id,
         "message": initial_response,
@@ -322,12 +281,10 @@ async def start_confirmation(order_id: str):
 async def send_message(order_id: str, message: dict):
     """Send a message to the agent"""
     user_input = message.get("text", "")
-    
     if not user_input:
         raise HTTPException(status_code=400, detail="Message text is required")
     
     response = agent.process_message(order_id, user_input)
-    
     return {
         "order_id": order_id,
         "user_message": user_input,
@@ -340,8 +297,35 @@ async def get_conversation(order_id: str):
     conversation = db.get_conversation(order_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
     return {"conversation": conversation}
+
+class CreateOrder(BaseModel):
+    customer_name: str
+    customer_phone: str
+    items: List[OrderItem]
+    total_amount: float
+    notes: Optional[str] = None
+
+@app.post("/orders")
+async def create_order(order: CreateOrder):
+    """Add a new order to the database"""
+    order_id = f"order_{str(uuid.uuid4())[:8]}"
+    now = datetime.utcnow()
+    with db.Session() as session:
+        new_order = OrderModel(
+            id=order_id,
+            customer_name=order.customer_name,
+            customer_phone=order.customer_phone,
+            items=[item.dict() for item in order.items],  # Store as list, not JSON string
+            total_amount=order.total_amount,
+            status="pending",
+            created_at=now,
+            confirmed_at=None,
+            notes=order.notes
+        )
+        session.add(new_order)
+        session.commit()
+    return {"id": order_id, "status": "created"}
 
 if __name__ == "__main__":
     import uvicorn

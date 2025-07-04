@@ -17,6 +17,17 @@
         <div class="main-content">
             <div class="sidebar">
                 <h3>Commandes en attente</h3>
+                <button id="show-add-order" class="start-confirmation" style="background:#667eea;margin-bottom:10px;">+ Nouvelle commande</button>
+                <form id="add-order-form" style="display:none; margin-bottom:20px; background:#f4f6fb; padding:15px; border-radius:8px;">
+                    <h4>Ajouter une commande</h4>
+                    <input type="text" id="add-customer-name" placeholder="Nom du client" required style="width:100%;margin-bottom:8px;">
+                    <input type="text" id="add-customer-phone" placeholder="Téléphone" required style="width:100%;margin-bottom:8px;">
+                    <textarea id="add-items" placeholder="Articles (ex: Pizza x2 12.5; Cola x1 2.5)" required style="width:100%;margin-bottom:8px;"></textarea>
+                    <input type="number" id="add-total-amount" placeholder="Total (€)" step="0.01" required style="width:100%;margin-bottom:8px;">
+                    <input type="text" id="add-notes" placeholder="Notes (optionnel)" style="width:100%;margin-bottom:8px;">
+                    <button type="submit" class="start-confirmation" style="background:#00b894;">Ajouter</button>
+                    <button type="button" id="cancel-add-order" class="start-confirmation" style="background:#ccc;color:#333;">Annuler</button>
+                </form>
                 <div id="orders-list" class="orders-list">
                     <div class="loading">Chargement...</div>
                 </div>
@@ -37,7 +48,7 @@
                     
                     <div class="chat-input">
                         <input type="text" id="message-input" placeholder="Tapez votre message..." disabled>
-                        <button id="send-button" disabled>Envoyer</button>
+                        <button id="send-button" type="button" disabled>Envoyer</button>
                     </div>
                 </div>
             </div>
