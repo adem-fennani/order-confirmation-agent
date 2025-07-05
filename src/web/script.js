@@ -129,6 +129,8 @@ function displayOrders(orders) {
         // Translate status for display
         let statusLabel = order.status;
         if (statusLabel === "pending") statusLabel = "en attente";
+        if (statusLabel === "confirmed") statusLabel = "confirmé";
+        if (statusLabel === "cancelled") statusLabel = "annulé";
         return `
         <div class="order-card" data-order-id="${order.id}">
             <div class="order-header">
@@ -489,6 +491,28 @@ async function sendMessage() {
         
         // Add agent response
         addMessage(data.agent_response, 'agent');
+        
+        // Refresh orders if conversation reached final confirmation
+        if (data.agent_response.includes("confirmée") || 
+            data.agent_response.includes("annulée")) {
+            // Small delay for better UX
+            setTimeout(() => {
+                loadOrders();
+                
+                // Update current order card status visually
+                const orderCard = document.querySelector(`[data-order-id="${currentOrderId}"]`);
+                if (orderCard) {
+                    const statusElement = orderCard.querySelector('.order-status');
+                    if (data.agent_response.includes("confirmée")) {
+                        statusElement.textContent = "confirmé";  // Changed to French
+                        statusElement.className = "order-status status-confirmed";
+                    } else if (data.agent_response.includes("annulée")) {
+                        statusElement.textContent = "annulé";    // Changed to French
+                        statusElement.className = "order-status status-cancelled";
+                    }
+                }
+            }, 500);
+        }
         
     } catch (error) {
         console.error('Error sending message:', error);

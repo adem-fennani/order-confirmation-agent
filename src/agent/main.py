@@ -244,9 +244,18 @@ class OrderConfirmationAgent:
             return "Merci pour ces informations. Je récapitule : votre commande sera livrée sous 30 minutes. Confirmez-vous cette commande ?"
         elif current_step == "final_confirmation":
             if any(word in user_input_lower for word in ["oui", "confirme", "ok", "d'accord"]):
+                # Update order status to confirmed
+                self.db.update_order(
+                    order_id=order_context.split('Commande ID: ')[1].split('\n')[0],
+                    updates={"status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()})
                 return "Parfait ! Votre commande est confirmée. Vous recevrez un SMS de confirmation. Merci et à bientôt !"
-            else:
-                return "Très bien, votre commande est annulée. N'hésitez pas à nous recontacter. Bonne journée !"
+        else:
+            # Update order status to cancelled if they say no
+            self.db.update_order(
+                order_id=order_context.split('Commande ID: ')[1].split('\n')[0],
+                updates={"status": "cancelled"}
+            )
+            return "Très bien, votre commande est annulée. N'hésitez pas à nous recontacter. Bonne journée !"
         return "Je ne suis pas sûr de comprendre. Pouvez-vous répéter ?"
 
     def _is_clear_confirmation(self, text: str) -> bool:

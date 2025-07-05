@@ -75,9 +75,7 @@ class SQLiteDatabase(DatabaseInterface):
             order = session.query(OrderModel).filter_by(id=order_id).first()
             if order:
                 for key, value in updates.items():
-                    if key == "items":
-                        setattr(order, key, json.dumps(value))
-                    elif key in ["created_at", "confirmed_at"] and isinstance(value, str):
+                    if key == "confirmed_at" and isinstance(value, str):
                         setattr(order, key, datetime.fromisoformat(value))
                     else:
                         setattr(order, key, value)

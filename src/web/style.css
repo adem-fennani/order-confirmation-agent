@@ -100,13 +100,16 @@ body {
 }
 
 .status-pending {
-    background: #ffeaa7;
-    color: #d63031;
+    color: #FF9800; 
+    font-style: italic;
 }
-
 .status-confirmed {
-    background: #b2fef7;
-    color: #009688;
+    color: #4CAF50; 
+    font-weight: bold;
+}
+.status-cancelled {
+    color: #F44336;
+    text-decoration: line-through;
 }
 
 .customer-info {
