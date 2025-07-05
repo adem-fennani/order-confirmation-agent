@@ -10,15 +10,6 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const errorMessage = document.getElementById('error-message');
 
-// Global form submit event listener for debugging
-// This will log and prevent any form submission anywhere in the app
-// Place this at the top of the script
-
-document.addEventListener('submit', function(e) {
-    console.log('A form submit event was triggered!', e.target);
-    e.preventDefault();
-});
-
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     loadOrders();
@@ -159,6 +150,9 @@ function displayOrders(orders) {
                     Démarrer conversation
                 </button>
                 <div style="display:flex;gap:8px;">
+                    <button class="reset-conversation-btn order-action-btn" type="button" data-order-id="${order.id}" title="Réinitialiser">
+                        <span>🔄</span>
+                    </button>
                     <button class="update-order-btn order-action-btn" type="button" data-order-id="${order.id}" title="Mettre à jour">
                         <span>✏️</span>
                     </button>
@@ -174,16 +168,16 @@ function displayOrders(orders) {
     // Add click listeners to order cards
     document.querySelectorAll('.order-card').forEach(card => {
         card.addEventListener('click', function(e) {
-            // Prevent bubbling from button clicks
             if (
                 e.target.classList.contains('start-confirmation') ||
                 e.target.classList.contains('delete-order-btn') ||
                 e.target.classList.contains('update-order-btn') ||
+                e.target.classList.contains('reset-conversation-btn') ||
                 e.target.closest('button')
             ) {
                 e.preventDefault();
                 e.stopPropagation();
-                return; // Let the button handle this
+                return;
             }
             selectOrder(this.dataset.orderId);
         });
@@ -242,7 +236,7 @@ function displayOrders(orders) {
                 return;
             }
             
-            // Show prompt for each field (simple version)
+            // Show prompt for each field
             const customer_name = prompt('Nom du client:', order.customer_name);
             if (customer_name === null) return;
             const customer_phone = prompt('Téléphone:', order.customer_phone);
@@ -286,6 +280,99 @@ function displayOrders(orders) {
             }
         });
     });
+
+    // In the reset conversation listeners section:
+    document.querySelectorAll('.reset-conversation-btn').forEach(btn => {
+        btn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const orderId = this.dataset.orderId;
+            if (confirm('Voulez-vous vraiment réinitialiser cette conversation ?')) {
+                try {
+                    isLoading = true;
+                    btn.disabled = true;
+                    
+                    // Clear the chat UI immediately
+                    if (currentOrderId === orderId) {
+                        chatMessages.innerHTML = '<div class="loading">Réinitialisation...</div>';
+                    }
+                    
+                    const resp = await fetch(`${API_BASE}/orders/${orderId}/reset`, { 
+                        method: 'POST' 
+                    });
+                    
+                    if (!resp.ok) {
+                        const error = await resp.json();
+                        throw new Error(error.detail || 'Erreur API');
+                    }
+                    
+                    const data = await resp.json();
+                    
+                    // If this is the currently selected order, update the chat
+                    if (currentOrderId === orderId) {
+                        chatMessages.innerHTML = '';
+                        // Add both user and agent messages
+                        addMessage(data.user_message, 'user');
+                        addMessage(data.agent_response, 'agent');
+                    }
+                    
+                    showSuccess('Conversation réinitialisée avec succès');
+                } catch (err) {
+                    console.error('Reset error:', err);
+                    showError(err.message || 'Erreur lors de la réinitialisation');
+                } finally {
+                    isLoading = false;
+                    btn.disabled = false;
+                }
+            }
+        });
+    });
+}
+
+async function sendMessageAutomatically(message) {
+    if (!currentOrderId || isLoading) return;
+    
+    try {
+        isLoading = true;
+        sendButton.disabled = true;
+        
+        // Add user message to UI
+        addMessage(message, 'user');
+        
+        // Send to API
+        const response = await fetch(`${API_BASE}/orders/${currentOrderId}/message`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text: message })
+        });
+        
+        const data = await response.json();
+        
+        // Add agent response
+        addMessage(data.agent_response, 'agent');
+        
+    } catch (error) {
+        console.error('Error sending automatic message:', error);
+    } finally {
+        isLoading = false;
+        sendButton.disabled = false;
+    }
+}
+
+async function sendInitialMessage(orderId) {
+    try {
+        const response = await fetch(`${API_BASE}/orders/${orderId}/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: "Bonjour" })
+        });
+        const data = await response.json();
+        addMessage(data.agent_response, 'agent');
+    } catch (error) {
+        console.error('Error sending initial message:', error);
+    }
 }
 
 function selectOrder(orderId) {
@@ -308,7 +395,6 @@ function selectOrder(orderId) {
 }
 
 async function startConfirmation(orderId) {
-    console.log('startConfirmation called', orderId);
     try {
         isLoading = true;
         sendButton.disabled = true;
@@ -377,13 +463,10 @@ function addMessage(text, sender) {
 }
 
 async function sendMessage() {
-    console.log('sendMessage called');
     if (!currentOrderId || isLoading) return;
     
     const text = messageInput.value.trim();
     if (!text) return;
-
-    console.log('before fetch');
     
     try {
         isLoading = true;
@@ -401,8 +484,6 @@ async function sendMessage() {
             },
             body: JSON.stringify({ text })
         });
-
-        console.log('after fetch');
         
         const data = await response.json();
         
@@ -428,9 +509,27 @@ function showLoading(element) {
 }
 
 function showError(message) {
-    errorMessage.textContent = message;
-    errorMessage.style.display = 'block';
+    const errorElement = document.getElementById('error-message');
+    const successElement = document.getElementById('success-message');
+    
+    errorElement.textContent = message;
+    errorElement.style.display = 'block';
+    successElement.style.display = 'none';
+    
     setTimeout(() => {
-        errorMessage.style.display = 'none';
+        errorElement.style.display = 'none';
+    }, 5000);
+}
+
+function showSuccess(message) {
+    const errorElement = document.getElementById('error-message');
+    const successElement = document.getElementById('success-message');
+    
+    successElement.textContent = message;
+    successElement.style.display = 'block';
+    errorElement.style.display = 'none';
+    
+    setTimeout(() => {
+        successElement.style.display = 'none';
     }, 5000);
 }

@@ -1,6 +1,5 @@
 # src/agent/database/sqlite.py
-# src/agent/database/sqlite.py
-from typing import Dict, Optional, Any  # Add at top
+from typing import Dict, Optional, Any
 from datetime import datetime
 import json
 from sqlalchemy import create_engine
@@ -120,3 +119,13 @@ class SQLiteDatabase(DatabaseInterface):
                 session.add(new_conv)
             session.commit()
             return True
+
+    def delete_conversation(self, order_id: str) -> bool:
+        """Delete conversation for an order"""
+        with self.Session() as session:
+            conv = session.query(ConversationModel).filter_by(order_id=order_id).first()
+            if conv:
+                session.delete(conv)
+                session.commit()
+                return True
+        return False

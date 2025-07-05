@@ -270,6 +270,38 @@ class OrderConfirmationAgent:
             "final_confirmation": "completed"
         }
         return step_transitions.get(current_step, current_step)
+    
+    def reset_conversation(self, order_id: str) -> str:
+        """Completely reset a conversation"""
+        # Delete existing conversation
+        self.db.delete_conversation(order_id)
+        
+        # Create fresh conversation state
+        conversation = ConversationState(
+            order_id=order_id,
+            messages=[],
+            current_step="greeting",
+            last_active=datetime.utcnow()
+        )
+        self.db.update_conversation(order_id, conversation.dict())
+        
+        # Process initial greeting
+        order_data = self.db.get_order(order_id)
+        if not order_data:
+            return "Commande non trouvée"
+            
+        order = Order(**order_data)
+        order_context = self._format_order_context(order)
+        
+        return (
+            "Conversation réinitialisée. " +
+            self._generate_response(
+                order_context,
+                "greeting",
+                "Pas d'historique",
+                "Bonjour"
+            )
+        )
 
 # FastAPI App
 app = FastAPI(title="Order Confirmation Agent API", version="1.0.0")
@@ -458,6 +490,58 @@ async def update_order(order_id: str, order: dict = Body(...)):
         db_order.notes = order.get("notes", db_order.notes)
         session.commit()
     return {"id": order_id, "status": "updated"}
+
+@app.post("/orders/{order_id}/reset")
+async def reset_conversation(order_id: str):
+    """Reset conversation for an order"""
+    try:
+        with db.Session() as session:
+            order = session.query(OrderModel).filter_by(id=order_id).first()
+            if not order:
+                raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Delete existing conversation
+        if hasattr(db, 'delete_conversation'):
+            db.delete_conversation(order_id)
+        
+        # Create fresh conversation state
+        conversation = ConversationState(
+            order_id=order_id,
+            messages=[],
+            current_step="greeting",
+            last_active=datetime.utcnow()
+        )
+        db.update_conversation(order_id, conversation.dict())
+        
+        # Process the automatic "Bonjour" from user
+        user_message = {"role": "user", "content": "Bonjour"}
+        conversation.messages.append(user_message)
+        
+        # Generate agent response
+        order_data = db.get_order(order_id)
+        order = Order(**order_data)
+        order_context = agent._format_order_context(order)
+        agent_response = agent._generate_response(
+            order_context,
+            "greeting",
+            "Pas d'historique",
+            "Bonjour"
+        )
+        
+        # Update conversation
+        conversation.messages.append({"role": "assistant", "content": agent_response})
+        conversation.current_step = "confirming_items"
+        db.update_conversation(order_id, conversation.dict())
+        
+        return {
+            "order_id": order_id,
+            "user_message": "Bonjour",
+            "agent_response": agent_response,
+            "status": "conversation_reset"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la réinitialisation: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

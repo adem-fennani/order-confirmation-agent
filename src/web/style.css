@@ -274,11 +274,23 @@ body {
 
 .error {
     background: #ff6b6b;
+    background-color: #ffebee; /* Light red */
+    color: #c62828; /* Dark red */
     color: white;
     padding: 10px;
     border-radius: 5px;
     margin: 10px 0;
     display: none;
+}
+
+.success {
+    background-color: #e8f5e9; /* Light green */
+    color: #2e7d32; /* Dark green */
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    text-align: center;
+    display: none; /* Hidden by default */
 }
 
 /* Add style for the add order form */
@@ -420,4 +432,23 @@ body {
 }
 .order-action-btn.delete-order-btn:hover {
     background: #d32f2f;
+}
+
+.reset-conversation-btn {
+    background: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.reset-conversation-btn:hover {
+    background: #f57c00;
+}
+
+.reset-conversation-btn span {
+    font-size: 16px;
 }
