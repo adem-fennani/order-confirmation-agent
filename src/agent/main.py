@@ -5,7 +5,7 @@ from src.agent.database.models import OrderModel
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, Field
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
@@ -46,31 +46,52 @@ class ConversationState(BaseModel):
     current_step: str = "greeting"  # greeting, confirming_items, confirming_details, final_confirmation
     confirmed_items: List[Dict] = []
     issues_found: List[str] = []
+    last_active: datetime = Field(default_factory=datetime.utcnow)
 
 # Order Confirmation Agent
 class OrderConfirmationAgent:
     def __init__(self, db: SQLiteDatabase): 
         self.db = db
         self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """Tu es un agent de confirmation de commande professionnel et sympathique. 
-            Ton rôle est de confirmer les détails d'une commande avec le client.
-            
-            Règles importantes:
-            - Sois poli et professionnel
-            - Reformule clairement les détails de la commande
-            - Pose des questions de clarification si nécessaire
-            - Confirme chaque élément un par un si la commande est complexe
-            - Demande confirmation finale avant de valider
-            - Si le client veut modifier quelque chose, note-le clairement
-            
-            Contexte de la commande:
-            {order_context}
-            
-            Étape actuelle: {current_step}
-            Historique de conversation: {conversation_history}
-            """),
+            ("system", self._get_dynamic_system_prompt()),
             ("human", "{user_input}")
         ])
+    
+    def _get_dynamic_system_prompt(self) -> str:
+        """Generate a dynamic system prompt based on time of day"""
+        hour = datetime.now().hour
+        greeting = "Bonne journée" if 6 <= hour < 18 else "Bonsoir"
+        
+        time_based_tone = ""
+        if 6 <= hour < 9:
+            time_based_tone = "Sois concis et direct, les clients sont probablement pressés le matin."
+        elif 9 <= hour < 12:
+            time_based_tone = "Sois professionnel mais amical."
+        elif 12 <= hour < 14:
+            time_based_tone = "Sois efficace, c'est l'heure du déjeuner."
+        elif 14 <= hour < 18:
+            time_based_tone = "Sois plus détendu et conversationnel."
+        else:
+            time_based_tone = "Sois courtois et concis, c'est le soir."
+        
+        return f"""Tu es un agent de confirmation de commande professionnel et sympathique. {greeting}!
+        Ton rôle est de confirmer les détails d'une commande avec le client.
+        
+        Règles importantes:
+        - {time_based_tone}
+        - Adapte ton ton à l'humeur du client
+        - Reformule clairement les détails de la commande
+        - Pose des questions de clarification si nécessaire
+        - Confirme chaque élément un par un si la commande est complexe
+        - Demande confirmation finale avant de valider
+        - Si le client veut modifier quelque chose, note-le clairement
+        
+        Contexte de la commande:
+        {{order_context}}
+        
+        Étape actuelle: {{current_step}}
+        Historique de conversation: {{conversation_history}}
+        """
     
     def process_message(self, order_id: str, user_input: str) -> str:
         """Process a message from the user and return agent response"""
@@ -93,8 +114,30 @@ class OrderConfirmationAgent:
         else:
             conversation = ConversationState(**conversation_data)
         
+        # Check for conversation timeout (1 hour inactivity)
+        if (datetime.utcnow() - conversation.last_active).seconds > 3600:
+            # Create summary of conversation progress
+            summary = f"nous confirmions votre commande {order_id}"
+            if conversation.current_step == "confirming_items":
+                summary = "nous vérifiions les articles de votre commande"
+            elif conversation.current_step == "confirming_details":
+                summary = "nous confirmions vos informations de livraison"
+            elif conversation.current_step == "final_confirmation":
+                summary = "nous étions sur le point de finaliser votre commande"
+            
+            return (
+                "Nous reprenons notre conversation après une pause. "
+                f"Pour rappel, {summary}.\n\n"
+                "Voici un rappel de votre commande:\n"
+                f"{self._format_order_context(order).split('Statut:')[0]}\n"
+                "Comment puis-je vous aider ?"
+            )
+        
         # Add user message to conversation
         conversation.messages.append({"role": "user", "content": user_input})
+        
+        # Update last active timestamp
+        conversation.last_active = datetime.utcnow()
         
         # Prepare context
         order_context = self._format_order_context(order)
@@ -134,41 +177,90 @@ class OrderConfirmationAgent:
         """
     
     def _format_conversation_history(self, messages: List[Dict[str, str]]) -> str:
-        if not messages:
-            return "Pas d'historique"
-        
-        history = []
-        for msg in messages[-4:]:  # Keep last 4 messages for context
-            role = "Client" if msg["role"] == "user" else "Agent"
-            history.append(f"{role}: {msg['content']}")
-        
-        return "\n".join(history)
+        # Use sliding window with more context
+        context_messages = messages[-10:]  # Increase context window
+        # Add summary of earlier conversation if exists
+        if len(messages) > 10:
+            summary = f"[Résumé: Conversation commencée il y a {len(messages)} messages]\n"
+        else:
+            summary = ""
+        history = [f"{'Client' if msg['role'] == 'user' else 'Agent'}: {msg['content']}" 
+                  for msg in context_messages]
+        return summary + "\n".join(history)
     
+    def _analyze_sentiment(self, text: str) -> float:
+        # Simple sentiment analysis (could be replaced with ML model)
+        positive_words = ["merci", "parfait", "super", "content"]
+        negative_words = ["fâché", "mécontent", "déçu", "insatisfait"]
+        score = 0
+        for word in positive_words:
+            if word in text.lower():
+                score += 1
+        for word in negative_words:
+            if word in text.lower():
+                score -= 1
+        return score
+
     def _generate_response(self, order_context: str, current_step: str, 
                           conversation_history: str, user_input: str) -> str:
-        """Generate response based on current context"""
+        """Generate response based on current context with more natural transitions and better edge case handling"""
+        sentiment = self._analyze_sentiment(user_input)
+        if sentiment <= -1:
+            return "Je m'excuse pour ce désagrément. Comment puis-je vous aider à résoudre ce problème ?"
         
+        user_input_lower = user_input.lower()
+        # Handle interruptions at any step
+        if any(word in user_input_lower for word in ["annuler", "stop", "arrêter"]):
+            return "Voulez-vous vraiment annuler la confirmation de commande ?"
+
+        # Extract customer name and order time from order_context
+        customer_name = None
+        order_time = None
+        match = re.search(r"Client: (.+)", order_context)
+        if match:
+            customer_name = match.group(1).strip()
+        else:
+            customer_name = "client"
+        # Try to extract time from order_context (format: 2025-07-05T14:23:00 or similar)
+        time_match = re.search(r"(\d{2}:\d{2})", order_context)
+        time_str = time_match.group(1) if time_match else ""
+
         if current_step == "greeting":
-            return f"Bonjour ! Je vous appelle pour confirmer votre commande. {order_context.split('Articles:')[1].split('Total:')[0]} pour un total de {order_context.split('Total: ')[1].split('€')[0]}€. Est-ce que ces informations sont correctes ?"
-        
+            if "modifier" in user_input_lower:
+                return self._handle_modification_request(order_context)
+            return f"Bonjour {customer_name}! Je vous appelle pour confirmer votre commande. {order_context.split('Articles:')[1].split('Total:')[0]} pour un total de {order_context.split('Total: ')[1].split('€')[0]}€. Est-ce que ces informations sont correctes ?"
         elif current_step == "confirming_items":
-            if any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
+            if not self._is_clear_confirmation(user_input):
+                return ("Je ne suis pas certain d'avoir bien compris. "
+                        "Pouvez-vous préciser si les articles mentionnés sont corrects "
+                        "ou s'il y a des modifications à apporter ?")
+            if any(word in user_input_lower for word in ["oui", "correct", "ok", "d'accord"]):
                 return "Parfait ! Pouvez-vous me confirmer votre nom et votre adresse de livraison ?"
-            elif any(word in user_input.lower() for word in ["non", "incorrect", "erreur", "changer"]):
-                return "Pas de problème ! Pouvez-vous me dire ce qui doit être modifié dans votre commande ?"
+            elif any(word in user_input_lower for word in ["non", "incorrect", "erreur", "changer", "modifier"]):
+                return self._handle_modification_request(order_context)
             else:
                 return "Je ne suis pas sûr de comprendre. Pouvez-vous me dire si les articles de votre commande sont corrects ?"
-        
         elif current_step == "confirming_details":
             return "Merci pour ces informations. Je récapitule : votre commande sera livrée sous 30 minutes. Confirmez-vous cette commande ?"
-        
         elif current_step == "final_confirmation":
-            if any(word in user_input.lower() for word in ["oui", "confirme", "ok", "d'accord"]):
+            if any(word in user_input_lower for word in ["oui", "confirme", "ok", "d'accord"]):
                 return "Parfait ! Votre commande est confirmée. Vous recevrez un SMS de confirmation. Merci et à bientôt !"
             else:
                 return "Très bien, votre commande est annulée. N'hésitez pas à nous recontacter. Bonne journée !"
-        
         return "Je ne suis pas sûr de comprendre. Pouvez-vous répéter ?"
+
+    def _is_clear_confirmation(self, text: str) -> bool:
+        positive = ["oui", "correct", "ok", "d'accord", "exact", "parfait"]
+        negative = ["non", "incorrect", "erreur", "changer", "modifier"]
+        text_lower = text.lower()
+        return any(word in text_lower for word in positive + negative)
+
+    def _handle_modification_request(self, order_context: str) -> str:
+        """Handle a user's request to modify the order."""
+        return ("Je peux vous aider à modifier votre commande. "
+                "Quel article souhaitez-vous modifier ?\n"
+                "Voici les articles actuels :\n"
+                f"{order_context.split('Articles:')[1].split('Total:')[0]}")
     
     def _determine_next_step(self, current_step: str, user_input: str, response: str) -> str:
         step_transitions = {

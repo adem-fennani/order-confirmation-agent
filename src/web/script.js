@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
-    messageInput.addEventListener('keypress', function(e) {
+    messageInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
@@ -134,11 +134,15 @@ function displayOrders(orders) {
         return;
     }
 
-    ordersList.innerHTML = orders.map(order => `
+    ordersList.innerHTML = orders.map(order => {
+        // Translate status for display
+        let statusLabel = order.status;
+        if (statusLabel === "pending") statusLabel = "en attente";
+        return `
         <div class="order-card" data-order-id="${order.id}">
             <div class="order-header">
                 <span class="order-id">${order.id}</span>
-                <span class="order-status status-${order.status}">${order.status}</span>
+                <span class="order-status status-${order.status}">${statusLabel}</span>
             </div>
             <div class="customer-info">
                 <div class="customer-name">${order.customer_name}</div>
@@ -164,7 +168,8 @@ function displayOrders(orders) {
                 </div>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     // Add click listeners to order cards
     document.querySelectorAll('.order-card').forEach(card => {
