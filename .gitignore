@@ -9,3 +9,5 @@ venv/
 *.sqlite
 *.sqlite3
 *.log 
+setup.bat
+setup.py
