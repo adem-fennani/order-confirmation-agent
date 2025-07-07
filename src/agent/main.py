@@ -505,50 +505,57 @@ async def reset_conversation(order_id: str):
     """Reset conversation for an order"""
     try:
         with db.Session() as session:
+            # Reset both conversation AND order status
             order = session.query(OrderModel).filter_by(id=order_id).first()
             if not order:
                 raise HTTPException(status_code=404, detail="Order not found")
-        
-        # Delete existing conversation
-        if hasattr(db, 'delete_conversation'):
-            db.delete_conversation(order_id)
-        
-        # Create fresh conversation state
-        conversation = ConversationState(
-            order_id=order_id,
-            messages=[],
-            current_step="greeting",
-            last_active=datetime.utcnow()
-        )
-        db.update_conversation(order_id, conversation.dict())
-        
-        # Process the automatic "Bonjour" from user
-        user_message = {"role": "user", "content": "Bonjour"}
-        conversation.messages.append(user_message)
-        
-        # Generate agent response
-        order_data = db.get_order(order_id)
-        order = Order(**order_data)
-        order_context = agent._format_order_context(order)
-        agent_response = agent._generate_response(
-            order_context,
-            "greeting",
-            "Pas d'historique",
-            "Bonjour"
-        )
-        
-        # Update conversation
-        conversation.messages.append({"role": "assistant", "content": agent_response})
-        conversation.current_step = "confirming_items"
-        db.update_conversation(order_id, conversation.dict())
-        
-        return {
-            "order_id": order_id,
-            "user_message": "Bonjour",
-            "agent_response": agent_response,
-            "status": "conversation_reset"
-        }
-        
+            
+            # Reset order status
+            order.status = "pending"
+            order.confirmed_at = None
+            
+            # Delete conversation if possible
+            if hasattr(db, 'delete_conversation'):
+                db.delete_conversation(order_id)
+            
+            # Create fresh conversation state
+            conversation = ConversationState(
+                order_id=order_id,
+                messages=[],
+                current_step="greeting",
+                last_active=datetime.utcnow()
+            )
+            db.update_conversation(order_id, conversation.dict())
+            
+            # Process the automatic "Bonjour" from user
+            user_message = {"role": "user", "content": "Bonjour"}
+            conversation.messages.append(user_message)
+            
+            # Generate agent response
+            order_data = db.get_order(order_id)
+            order = Order(**order_data)
+            order_context = agent._format_order_context(order)
+            agent_response = agent._generate_response(
+                order_context,
+                "greeting",
+                "Pas d'historique",
+                "Bonjour"
+            )
+            
+            # Update conversation
+            conversation.messages.append({"role": "assistant", "content": agent_response})
+            conversation.current_step = "confirming_items"
+            db.update_conversation(order_id, conversation.dict())
+            
+            session.commit()
+            
+            return {
+                "order_id": order_id,
+                "user_message": "Bonjour",
+                "agent_response": agent_response,
+                "status": "conversation_reset"
+            }
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la réinitialisation: {str(e)}")
 

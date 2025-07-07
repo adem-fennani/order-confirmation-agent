@@ -283,7 +283,7 @@ function displayOrders(orders) {
         });
     });
 
-    // In the reset conversation listeners section:
+    // In the reset button click handler:
     document.querySelectorAll('.reset-conversation-btn').forEach(btn => {
         btn.addEventListener('click', async function(e) {
             e.preventDefault();
@@ -313,9 +313,16 @@ function displayOrders(orders) {
                     // If this is the currently selected order, update the chat
                     if (currentOrderId === orderId) {
                         chatMessages.innerHTML = '';
-                        // Add both user and agent messages
                         addMessage(data.user_message, 'user');
                         addMessage(data.agent_response, 'agent');
+                        
+                        // Update status visually to "en attente"
+                        const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
+                        if (orderCard) {
+                            const statusElement = orderCard.querySelector('.order-status');
+                            statusElement.textContent = "en attente";
+                            statusElement.className = "order-status status-pending";
+                        }
                     }
                     
                     showSuccess('Conversation réinitialisée avec succès');

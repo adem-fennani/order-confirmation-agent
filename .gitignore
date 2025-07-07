@@ -4,10 +4,10 @@ __pycache__/
 venv/ 
 .env 
 .vscode/ 
-# Add this to your .gitignore file
 *.db
 *.sqlite
 *.sqlite3
-*.log 
+*.log
+*.egg-info/ 
 setup.bat
 setup.py
