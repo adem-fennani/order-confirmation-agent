@@ -376,4 +376,4 @@ class OrderConfirmationAgent:
                 "Pas d'historique",
                 "Bonjour"
             )
-        ) 
+        )   

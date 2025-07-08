@@ -11,3 +11,4 @@ venv/
 *.egg-info/ 
 setup.bat
 setup.py
+README_NEXT_STEPS.md
