@@ -7,6 +7,7 @@ import json
 import re
 from difflib import get_close_matches
 from src.services.ai_service import call_llm, LLMServiceError
+from fastapi.encoders import jsonable_encoder
 
 class OrderConfirmationAgent:
     def __init__(self, db: SQLiteDatabase): 
@@ -49,12 +50,12 @@ class OrderConfirmationAgent:
         Historique de conversation: {{conversation_history}}
         """
     
-    def process_message(self, order_id: str, user_input: str) -> str:
+    def process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
         """
         LLM-first: Try to process the message using the LLM pipeline. If it fails, fallback to the old rule-based logic.
         """
         try:
-            llm_response = self.llm_process_message(order_id, user_input)
+            llm_response = self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
                 return llm_response
             else:
@@ -64,7 +65,7 @@ class OrderConfirmationAgent:
             # Fallback to the old logic
             return self.process_message_basic(order_id, user_input)
 
-    def llm_process_message(self, order_id: str, user_input: str) -> str:
+    def llm_process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
         """
         New LLM-centric conversation logic. Handles all steps: greeting, confirmation, modification, etc.
         Returns the agent's response as a string. Raises on LLM or parsing failure.
@@ -86,15 +87,80 @@ class OrderConfirmationAgent:
         conversation.last_active = datetime.utcnow()
         order_context = self._format_order_context(order)
         conversation_history = self._format_conversation_history(conversation.messages)
-        # Improved LLM prompt with explicit instructions and examples
-        prompt = f"""
-Tu es un agent de confirmation de commande. Voici le contexte de la commande :
+        # Add language instruction and dynamic prompt/examples
+        if language.startswith("en"):
+            language_instruction = (
+                "Always reply in English, matching the user's message language. "
+                "The user may switch between French and English (or other languages) at any time. "
+                f"Detected language for this message: {language}."
+            )
+            prompt = f"""
+{language_instruction}
+
+You are a professional and friendly order confirmation agent. Here is the order context:
+{order_context}
+
+Conversation history:
+{conversation_history}
+
+The client said: \"{user_input}\"
+
+Reply strictly with a JSON in the following format:
+{{
+  "message": "...",  // What the agent should say to the client
+  "action": "confirm|modify|cancel|add|remove|replace|none",  // The action to take (use 'none' if no action is required)
+  "modification": {{ "old_item": "...", "new_item": "...", "item": "..." }} // if applicable, otherwise null
+}}
+Do not add any text before or after the JSON.
+
+Examples:
+- If the client says "No, that's all", reply:
+{{
+  "message": "Thank you, your order is confirmed.",
+  "action": "confirm",
+  "modification": null
+}}
+- If the client says "Yes", reply:
+{{
+  "message": "Perfect, we are proceeding with the preparation.",
+  "action": "confirm",
+  "modification": null
+}}
+- If the client says "I want to add Pizza x1", reply:
+{{
+  "message": "Your order now also includes a Pizza x1. The total has been updated. Do you want to add anything else?",
+  "action": "add",
+  "modification": {{ "item": "Pizza", "old_item": null, "new_item": null }}
+}}
+- If the client says "I want to replace Lasagna with Pizza", reply:
+{{
+  "message": "Lasagna has been replaced by Pizza in your order.",
+  "action": "replace",
+  "modification": {{ "old_item": "Lasagna", "new_item": "Pizza", "item": null }}
+}}
+- If the client says "Thank you", reply:
+{{
+  "message": "Thank you! Feel free to contact us if you need anything else.",
+  "action": "none",
+  "modification": null
+}}
+"""
+        else:
+            language_instruction = (
+                "Réponds toujours en français, en accord avec la langue du message de l'utilisateur. "
+                "L'utilisateur peut passer du français à l'anglais (ou à d'autres langues) à tout moment. "
+                f"Langue détectée pour ce message : {language}."
+            )
+            prompt = f"""
+{language_instruction}
+
+Tu es un agent de confirmation de commande professionnel et sympathique. Voici le contexte de la commande :
 {order_context}
 
 Historique de la conversation :
 {conversation_history}
 
-Le client a dit : "{user_input}"
+Le client a dit : \"{user_input}\"
 
 Réponds avec un JSON strictement de la forme :
 {{
@@ -522,7 +588,7 @@ Ne mets aucun texte avant ou après le JSON.
             return "confirming_details"
         return step_transitions.get(current_step, current_step)
     
-    def reset_conversation(self, order_id: str) -> str:
+    def reset_conversation(self, order_id: str) -> dict:
         self.db.delete_conversation(order_id)
         conversation = ConversationState(
             order_id=order_id,
@@ -533,7 +599,7 @@ Ne mets aucun texte avant ou après le JSON.
         self.db.update_conversation(order_id, conversation.dict())
         order_data = self.db.get_order(order_id)
         if not order_data:
-            return "Commande non trouvée"
+            return {"message": "Commande non trouvée"}
         order = Order(**order_data)
         order_context = self._format_order_context(order)
         # Only use the string part of the tuple returned by _generate_response
@@ -544,6 +610,6 @@ Ne mets aucun texte avant ou après le JSON.
             "Bonjour",
             conversation=conversation
         )
-        return (
-            "Conversation réinitialisée. " + response
-        )   
+        return {
+            "message": "Conversation réinitialisée. " + response
+        }   

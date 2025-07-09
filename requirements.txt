@@ -4,3 +4,4 @@ langchain-core==0.1.12
 sqlalchemy>=2.0
 pydantic>=2.0
 python-multipart==0.0.6 
+langdetect 

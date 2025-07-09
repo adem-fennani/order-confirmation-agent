@@ -7,6 +7,7 @@ from src.api.dependencies import get_db, get_agent
 import uuid
 from datetime import datetime
 import json
+from fastapi.encoders import jsonable_encoder
 
 router = APIRouter()
 
@@ -93,10 +94,15 @@ async def start_confirmation(order_id: str, db=Depends(get_db), agent=Depends(ge
 
 @router.post("/orders/{order_id}/message")
 async def send_message(order_id: str, message: dict, agent=Depends(get_agent)):
+    from langdetect import detect
     user_input = message.get("text", "")
     if not user_input:
         raise HTTPException(status_code=400, detail="Message text is required")
-    response = agent.process_message(order_id, user_input)
+    try:
+        language = detect(user_input)
+    except Exception:
+        language = "fr"  # Default to French if detection fails
+    response = agent.process_message(order_id, user_input, language=language)
     return {
         "order_id": order_id,
         "user_message": user_input,
@@ -159,55 +165,7 @@ async def update_order(order_id: str, order: dict = Body(...), db=Depends(get_db
 @router.post("/orders/{order_id}/reset")
 async def reset_conversation(order_id: str, db=Depends(get_db), agent=Depends(get_agent)):
     try:
-        with db.Session() as session:
-            order = session.query(OrderModel).filter_by(id=order_id).first()
-            if not order:
-                raise HTTPException(status_code=404, detail="Order not found")
-            order.status = "pending"  # type: ignore
-            order.confirmed_at = None  # type: ignore
-            if hasattr(db, 'delete_conversation'):
-                db.delete_conversation(order_id)
-            conversation = ConversationState(
-                order_id=order_id,
-                messages=[],
-                current_step="greeting",
-                last_active=datetime.utcnow()
-            )
-            db.update_conversation(order_id, conversation.dict())
-            user_message = {"role": "user", "content": "Bonjour"}
-            conversation.messages.append(user_message)
-            order_data = db.get_order(order_id)
-            if not order_data:
-                raise HTTPException(status_code=404, detail="Order not found")
-            if not isinstance(order_data, dict):
-                order_data = {
-                    "id": order_data.id,
-                    "customer_name": order_data.customer_name,
-                    "customer_phone": order_data.customer_phone,
-                    "items": order_data.items,
-                    "total_amount": order_data.total_amount,
-                    "status": order_data.status,
-                    "created_at": order_data.created_at,
-                    "confirmed_at": order_data.confirmed_at,
-                    "notes": order_data.notes
-                }
-            order_obj = Order(**order_data)
-            order_context = agent._format_order_context(order_obj)
-            agent_response = agent._generate_response(
-                order_context,
-                "greeting",
-                "Pas d'historique",
-                "Bonjour"
-            )
-            conversation.messages.append({"role": "assistant", "content": agent_response})
-            conversation.current_step = "confirming_items"
-            db.update_conversation(order_id, conversation.dict())
-            session.commit()
-            return {
-                "order_id": order_id,
-                "user_message": "Bonjour",
-                "agent_response": agent_response,
-                "status": "conversation_reset"
-            }
+        result = agent.reset_conversation(order_id)
+        return jsonable_encoder(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la réinitialisation: {str(e)}") 
