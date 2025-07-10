@@ -42,9 +42,14 @@ def call_llm(prompt, model=DEFAULT_MODEL, system_prompt=None, max_tokens=512):
                 print("OpenRouter Reset (human):", reset_dt.strftime("%Y-%m-%d %H:%M:%S"))
             except Exception as e:
                 print("Could not parse reset timestamp:", e)
+        if response.status_code == 429:
+            # Quota or rate limit exceeded
+            raise LLMServiceError("quota_exceeded")
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"]
+    except LLMServiceError as e:
+        raise
     except Exception as e:
         raise LLMServiceError(f"LLM call failed: {e}")
 

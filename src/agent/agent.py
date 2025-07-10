@@ -60,9 +60,17 @@ class OrderConfirmationAgent:
                 return llm_response
             else:
                 raise ValueError("LLM returned empty or invalid response")
-        except Exception as e:
+        except LLMServiceError as e:
+            if str(e) == "quota_exceeded":
+                if language.startswith("en"):
+                    return "Our assistant is temporarily unavailable (quota exceeded). Please try again later or contact support."
+                else:
+                    return "Notre assistant est temporairement indisponible (quota dépassé). Merci de réessayer plus tard ou de contacter le support."
             print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
             # Fallback to the old logic
+            return self.process_message_basic(order_id, user_input)
+        except Exception as e:
+            print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
             return self.process_message_basic(order_id, user_input)
 
     def llm_process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:

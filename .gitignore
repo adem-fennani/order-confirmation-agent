@@ -12,3 +12,4 @@ venv/
 setup.bat
 setup.py
 README_NEXT_STEPS.md
+pytest.ini
