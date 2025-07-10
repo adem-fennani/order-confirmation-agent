@@ -31,6 +31,17 @@ def call_llm(prompt, model=DEFAULT_MODEL, system_prompt=None, max_tokens=512):
     }
     try:
         response = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=30)
+        # Log rate limit headers
+        print("OpenRouter Rate Limit:", response.headers.get("X-RateLimit-Limit"))
+        print("OpenRouter Remaining:", response.headers.get("X-RateLimit-Remaining"))
+        reset_ts = response.headers.get("X-RateLimit-Reset")
+        if reset_ts:
+            try:
+                import datetime
+                reset_dt = datetime.datetime.fromtimestamp(int(reset_ts) / 1000)
+                print("OpenRouter Reset (human):", reset_dt.strftime("%Y-%m-%d %H:%M:%S"))
+            except Exception as e:
+                print("Could not parse reset timestamp:", e)
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"]

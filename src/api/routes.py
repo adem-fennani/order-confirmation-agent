@@ -64,28 +64,8 @@ async def get_order(order_id: str, db=Depends(get_db)):
 
 @router.post("/orders/{order_id}/confirm")
 async def start_confirmation(order_id: str, db=Depends(get_db), agent=Depends(get_agent)):
-    with db.Session() as session:
-        order = session.query(OrderModel).filter_by(id=order_id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        items = order.items
-        if isinstance(items, str):
-            try:
-                items = json.loads(items)
-            except Exception:
-                items = []
-        order_data = {
-            "id": order.id,
-            "customer_name": order.customer_name,
-            "customer_phone": order.customer_phone,
-            "items": items,
-            "total_amount": order.total_amount,
-            "status": order.status,
-            "created_at": order.created_at,
-            "confirmed_at": order.confirmed_at,
-            "notes": order.notes
-        }
-    initial_response = agent.process_message(order_id, "Bonjour")
+    # No need to fetch order_data here, just pass language (default 'fr')
+    initial_response = agent.start_conversation(order_id, language="fr")
     return {
         "order_id": order_id,
         "message": initial_response,

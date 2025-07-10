@@ -128,7 +128,7 @@ Examples:
 }}
 - If the client says "I want to add Pizza x1", reply:
 {{
-  "message": "Your order now also includes a Pizza x1. The total has been updated. Do you want to add anything else?",
+  "message": "I have added Pizza x1 to your order. The total has been updated. Is your order now correct?",
   "action": "add",
   "modification": {{ "item": "Pizza", "old_item": null, "new_item": null }}
 }}
@@ -185,7 +185,7 @@ Exemples :
 }}
 - Si le client dit "Je veux ajouter Pizza x1", réponds :
 {{
-  "message": "Votre commande comprend maintenant également une Pizza x1. Le total de votre commande est désormais mis à jour. Avez-vous une autre commande à ajouter ?",
+  "message": "J'ai ajouté Pizza x1 à votre commande. Le total a été mis à jour. Est-ce que votre commande est correcte maintenant ?",
   "action": "add",
   "modification": {{ "item": "Pizza", "old_item": null, "new_item": null }}
 }}
@@ -210,7 +210,7 @@ Exemples :
             json_str = json_str.replace('"', '"').replace("'", "'")
             json_str = json_str.replace("'", "'")
             # Remove trailing commas before closing braces/brackets
-            json_str = re.sub(r',([ \t\r\n]*[}}\]])', r'\1', json_str)
+            json_str = re.sub(r',([ \t\r\n]*[}}]])', r'\1', json_str)
             # Remove non-breaking spaces and invisible characters
             json_str = json_str.replace('\u00A0', ' ')
             match = re.search(r'\{.*\}', json_str, re.DOTALL)
@@ -228,6 +228,14 @@ Exemples :
                         "confirmed_at": datetime.utcnow().isoformat()
                     }
                 )
+            elif data.get("action") == "cancel":
+                self.db.update_order(
+                    order_id,
+                    {
+                        "status": "cancelled",
+                        "cancelled_at": datetime.utcnow().isoformat()
+                    }
+                )
             # Handle action if needed (e.g., apply modification)
             if data.get("action") in {"modify", "replace", "remove", "add"} and data.get("modification"):
                 self._apply_llm_modification(order_id, order, data["modification"], data["action"])
@@ -241,10 +249,10 @@ Exemples :
 
     def _apply_llm_modification(self, order_id, order, modification, action):
         """Apply the modification as instructed by the LLM."""
+        from difflib import get_close_matches
         if action in {"remove"} and modification.get("item"):
             order.items = [item for item in order.items if item.name != modification["item"]]
         elif action in {"replace", "modify"} and modification.get("old_item") and modification.get("new_item"):
-            from difflib import get_close_matches
             old_item_name = modification["old_item"]
             item_names = [item.name for item in order.items]
             closest = get_close_matches(old_item_name, item_names, n=1, cutoff=0.6)
@@ -254,12 +262,30 @@ Exemples :
                         item.name = modification["new_item"]
                         break
         elif action == "add" and modification.get("item"):
-            order.items.append(OrderItem(
-                name=modification["item"],
-                quantity=1,
-                price=0,  # Should be fetched from DB
-                notes='Ajouté via LLM'
-            ))
+            item_name_to_add = modification["item"]
+            
+            # Find if item already exists in order (case-insensitive check)
+            existing_item = next((item for item in order.items if item.name.lower() == item_name_to_add.lower()), None)
+
+            if existing_item:
+                existing_item.quantity += 1
+            else:
+                # If no exact match, check for a close match to handle typos or variations.
+                item_names = [item.name for item in order.items]
+                matches = get_close_matches(item_name_to_add, item_names, n=1, cutoff=0.8)
+                if matches:
+                    item_to_update = next((item for item in order.items if item.name == matches[0]), None)
+                    if item_to_update:
+                        item_to_update.quantity += 1
+                else:
+                    # If no existing item is found, add it as a new item.
+                    # Note: Price is defaulted to 0, which is a limitation.
+                    order.items.append(OrderItem(
+                        name=item_name_to_add,
+                        quantity=1,
+                        price=0,  # FIXME: Price should be fetched from a product catalog.
+                        notes='Ajouté via LLM'
+                    ))
         self.db.update_order(order_id, {
             'items': [item.dict() if hasattr(item, 'dict') else item for item in order.items],
             'total_amount': sum(item.price * item.quantity for item in order.items)
@@ -271,12 +297,25 @@ Exemples :
         # This is a placeholder for the fallback.
         return "[Fallback] LLM n'a pas compris. (Ancienne logique à implémenter ici.)"
 
-    def _format_order_context(self, order: Order) -> str:
+    def _format_order_context(self, order: Order, language: str = "fr") -> str:
+        item_price_lang = "each" if language.startswith("en") else "chacun"
         items_str = "\n".join([
-            f"- {item.name} x{item.quantity} ({item.price}€ chacun)" 
+            f"- {item.name} x{item.quantity} ({item.price}€ {item_price_lang})"
             for item in order.items
         ])
-        return f"""
+
+        if language.startswith("en"):
+            return f"""
+Order ID: {order.id}
+Customer: {order.customer_name}
+Phone: {order.customer_phone}
+Items:
+{items_str}
+Total: {order.total_amount}€
+Status: {order.status}
+"""
+        else:
+            return f"""
         Commande ID: {order.id}
         Client: {order.customer_name}
         Téléphone: {order.customer_phone}
@@ -368,13 +407,15 @@ Exemples :
             print(f"[DEBUG] _generate_response (after _process_modification): modification_request={getattr(conversation, 'modification_request', None)}")
             return (result, conversation)
         elif current_step == "confirming_details":
-            return ("Merci pour ces informations. Je récapitule : votre commande sera livrée sous 30 minutes. Confirmez-vous cette commande ?", conversation)
+            # Ask for explicit final confirmation before proceeding
+            conversation.current_step = "final_confirmation"
+            return ("Merci, nous récapitulons votre commande. Confirmez-vous que tout est correct avant que nous procédions à la préparation ?", conversation)
         elif current_step == "final_confirmation":
             if any(word in user_input_lower for word in ["oui", "confirme", "ok", "d'accord"]):
                 self.db.update_order(
                     order_id=order_context.split('Commande ID: ')[1].split('\n')[0],
                     updates={"status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()})
-                return ("Parfait ! Votre commande est confirmée. Vous recevrez un SMS de confirmation. Merci et à bientôt !", conversation)
+                return ("Parfait, nous procédons à la préparation de votre commande.", conversation)
             else:
                 self.db.update_order(
                     order_id=order_context.split('Commande ID: ')[1].split('\n')[0],
@@ -586,6 +627,8 @@ Ne mets aucun texte avant ou après le JSON.
         if current_step == "confirming_items" and any(word in response.lower() 
         for word in ["nom et votre adresse", "détails de livraison"]):
             return "confirming_details"
+        if current_step == "final_confirmation" and any(word in user_input.lower() for word in ["oui", "confirme", "ok", "d'accord"]):
+            return "completed"
         return step_transitions.get(current_step, current_step)
     
     def reset_conversation(self, order_id: str) -> dict:
@@ -613,3 +656,26 @@ Ne mets aucun texte avant ou après le JSON.
         return {
             "message": "Conversation réinitialisée. " + response
         }   
+
+    def start_conversation(self, order_id: str, language: str = "fr") -> str:
+        order_data = self.db.get_order(order_id)
+        if not order_data:
+            return "Sorry, I can't find this order." if language.startswith("en") else "Désolé, je ne trouve pas cette commande."
+        
+        order = Order(**order_data)
+        conversation = ConversationState(
+            order_id=order_id,
+            messages=[],
+            current_step="greeting"
+        )
+        
+        order_context = self._format_order_context(order, language=language)
+        
+        if language.startswith("en"):
+            message = f"Hello {order.customer_name}, I'm calling to confirm your order. Here are the details: {order_context}. Is this correct?"
+        else:
+            message = f"Bonjour {order.customer_name}, je vous appelle pour confirmer votre commande. Voici les détails : {order_context}. Est-ce que c'est correct ?"
+        
+        conversation.messages.append({"role": "assistant", "content": message})
+        self.db.update_conversation(order_id, conversation.dict())
+        return message   

@@ -12,40 +12,13 @@ class SQLiteDatabase(DatabaseInterface):
         self.engine = create_engine(db_url)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
-        
-        # Load sample data if empty
-        with self.Session() as session:
-            if session.query(OrderModel).count() == 0:
-                self._load_sample_orders(session)
     
-    def _load_sample_orders(self, session):
-        sample_orders = [
-            OrderModel(
-                id="order_001",
-                customer_name="Marie Dubois",
-                customer_phone="+33123456789",
-                items=json.dumps([
-                    {"name": "Pizza Margherita", "quantity": 2, "price": 12.50},
-                    {"name": "Coca-Cola", "quantity": 2, "price": 2.50}
-                ]),
-                total_amount=30.00,
-                created_at=datetime.utcnow()
-            ),
-            OrderModel(
-                id="order_002",
-                customer_name="Jean Martin",
-                customer_phone="+33987654321",
-                items=json.dumps([
-                    {"name": "Burger Classic", "quantity": 1, "price": 8.90},
-                    {"name": "Frites", "quantity": 1, "price": 3.50},
-                    {"name": "Milkshake Vanille", "quantity": 1, "price": 4.50}
-                ]),
-                total_amount=16.90,
-                created_at=datetime.utcnow()
-            )
-        ]
-        session.add_all(sample_orders)
-        session.commit()
+    def create_order(self, order_data: Dict) -> None:
+        with self.Session() as session:
+            order_data['created_at'] = datetime.fromisoformat(order_data['created_at'])
+            order = OrderModel(**order_data)
+            session.add(order)
+            session.commit()
     
     def get_order(self, order_id: str) -> Optional[Dict]:
         with self.Session() as session:
