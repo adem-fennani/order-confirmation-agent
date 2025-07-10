@@ -759,24 +759,54 @@ Ne mets aucun texte avant ou après le JSON.
         order_data = self.db.get_order(order_id)
         if not order_data:
             return "Sorry, I can't find this order." if language.startswith("en") else "Désolé, je ne trouve pas cette commande."
-        
         order = Order(**order_data)
         conversation = ConversationState(
             order_id=order_id,
             messages=[],
             current_step="greeting"
         )
-        
-        order_context = self._format_order_context(order, language=language)
-        
+        # Use the new natural summary for the first message
+        order_summary = self._format_order_summary_natural(order, language=language)
         if language.startswith("en"):
-            message = f"Hello {order.customer_name}, I'm calling to confirm your order. Here are the details: {order_context}. Is this correct?"
+            message = f"Hello {order.customer_name}, I'm confirming your order. {order_summary} Is this correct?"
         else:
-            message = f"Bonjour {order.customer_name}, je vous appelle pour confirmer votre commande. Voici les détails : {order_context}. Est-ce que c'est correct ?"
-        
+            message = f"Bonjour {order.customer_name}, je vous appelle pour confirmer votre commande. {order_summary} Est-ce que c'est correct ?"
         conversation.messages.append({"role": "assistant", "content": message})
         self.db.update_conversation(order_id, conversation.dict())
         return message   
+
+    def _format_order_summary_natural(self, order: Order, language: str = "fr") -> str:
+        items = order.items
+        if not items:
+            return ""
+        if language.startswith("en"):
+            if len(items) == 1:
+                item = items[0]
+                total = item.price * item.quantity
+                return f"You ordered {item.quantity}x {item.name.lower()} for a total of {total:.1f}€."
+            else:
+                item_strs = []
+                for item in items:
+                    if item.quantity == 1:
+                        item_strs.append(f"1x {item.name.lower()} ({item.price:.1f}€)")
+                    else:
+                        item_strs.append(f"{item.quantity}x {item.name} ({item.price:.1f}€ each)")
+                total = sum(item.price * item.quantity for item in items)
+                return f"You ordered {', '.join(item_strs)} for a total of {total:.1f}€."
+        else:
+            if len(items) == 1:
+                item = items[0]
+                total = item.price * item.quantity
+                return f"Vous avez commandé {item.quantity}x {item.name.lower()} pour un total de {total:.1f}€."
+            else:
+                item_strs = []
+                for item in items:
+                    if item.quantity == 1:
+                        item_strs.append(f"1x {item.name.lower()} ({item.price:.1f}€)")
+                    else:
+                        item_strs.append(f"{item.quantity}x {item.name} ({item.price:.1f}€ chacun)")
+                total = sum(item.price * item.quantity for item in items)
+                return f"Vous avez commandé {', '.join(item_strs)} pour un total de {total:.1f}€."
 
     def _infer_language_from_conversation(self, conversation):
         # Try to infer language from the last user message

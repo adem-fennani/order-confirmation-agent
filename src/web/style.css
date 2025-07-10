@@ -5,8 +5,8 @@
 }
 
 body {
-    font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #00b4d8 0%, #1976d2 100%);
+    font-family: 'Inter', 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 50%, #ff6b9d 100%);
     min-height: 100vh;
     padding: 20px;
     letter-spacing: 0.01em;
@@ -22,7 +22,7 @@ body {
 }
 
 .header {
-    background: linear-gradient(135deg, #00b4d8 0%, #1976d2 100%);
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 50%, #ff6b9d 100%);
     color: white;
     padding: 20px;
     text-align: center;
@@ -70,14 +70,14 @@ body {
 }
 
 .order-card:hover {
-    border-color: #00b4d8;
+    border-color: #ff6b6b;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(255,107,107,0.25);
 }
 
 .order-card.selected {
-    border-color: #00b4d8;
-    background: #e3f2fd;
+    border-color: #ff6b6b;
+    background: linear-gradient(135deg, #fff5f5 0%, #fff1f1 100%);
 }
 
 .order-header {
@@ -89,7 +89,7 @@ body {
 
 .order-id {
     font-weight: bold;
-    color: #1976d2;
+    color: #e53e3e;
 }
 
 .order-status {
@@ -100,15 +100,15 @@ body {
 }
 
 .status-pending {
-    color: #FF9800; 
+    color: #ff8e53; 
     font-style: italic;
 }
 .status-confirmed {
-    color: #4CAF50; 
+    color: #48bb78; 
     font-weight: bold;
 }
 .status-cancelled {
-    color: #F44336;
+    color: #e53e3e;
     text-decoration: line-through;
 }
 
@@ -118,7 +118,7 @@ body {
 
 .customer-name {
     font-weight: bold;
-    color: #1976d2;
+    color: #e53e3e;
 }
 
 .customer-phone {
@@ -129,7 +129,7 @@ body {
 .order-total {
     font-size: 1.1rem;
     font-weight: bold;
-    color: #1976d2;
+    color: #e53e3e;
     text-align: right;
 }
 
@@ -147,7 +147,7 @@ body {
     padding: 15px;
     border-bottom: 1px solid #e9ecef;
     font-weight: bold;
-    color: #1976d2;
+    color: #e53e3e;
 }
 
 .chat-messages {
@@ -175,14 +175,14 @@ body {
 }
 
 .message.user .message-bubble {
-    background: #00b4d8;
+    background: linear-gradient(135deg, #ff6b9d 0%, #ff8e53 100%);
     color: white;
     border-bottom-right-radius: 5px;
 }
 
 .message.agent .message-bubble {
     background: white;
-    color: #1976d2;
+    color: #e53e3e;
     border: 1px solid #e0e6ed;
     border-bottom-left-radius: 5px;
 }
@@ -205,13 +205,13 @@ body {
 }
 
 .chat-input input:focus {
-    border-color: #1de9b6;
+    border-color: #ff6b6b;
 }
 
 .chat-input button {
     margin-left: 10px;
     padding: 12px 20px;
-    background: #00bcd4;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
     color: white;
     border: none;
     border-radius: 25px;
@@ -222,7 +222,7 @@ body {
 }
 
 .chat-input button:hover {
-    background: #0097a7;
+    background: linear-gradient(135deg, #e53e3e 0%, #dd6b20 100%);
     transform: translateY(-1px);
 }
 
@@ -235,7 +235,7 @@ body {
 .start-confirmation {
     width: 100%;
     padding: 12px;
-    background: #00b4d8;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
     color: white;
     border: none;
     border-radius: 8px;
@@ -248,7 +248,7 @@ body {
 }
 
 .start-confirmation:hover {
-    background: #1976d2;
+    background: linear-gradient(135deg, #e53e3e 0%, #dd6b20 100%);
     transform: translateY(-1px);
 }
 
@@ -260,7 +260,7 @@ body {
 
 .empty-state h3 {
     margin-bottom: 10px;
-    color: #1976d2;
+    color: #e53e3e;
 }
 
 @keyframes fadeIn {
@@ -276,10 +276,8 @@ body {
 }
 
 .error {
-    background: #ff6b6b;
-    background-color: #ffebee; /* Light red */
-    color: #c62828; /* Dark red */
-    color: white;
+    background: #fed7d7;
+    color: #c53030;
     padding: 10px;
     border-radius: 5px;
     margin: 10px 0;
@@ -287,19 +285,19 @@ body {
 }
 
 .success {
-    background-color: #e8f5e9; /* Light green */
-    color: #2e7d32; /* Dark green */
+    background-color: #c6f6d5;
+    color: #22543d;
     padding: 10px;
     margin: 10px 0;
     border-radius: 4px;
     text-align: center;
-    display: none; /* Hidden by default */
+    display: none;
 }
 
 /* Add style for the add order form */
 #add-order-form {
     background: #fff;
-    box-shadow: 0 2px 12px rgba(38,198,218,0.08);
+    box-shadow: 0 2px 12px rgba(255,107,107,0.15);
     border: 1px solid #e0e6ed;
     border-radius: 12px;
     padding: 20px 18px 15px 18px;
@@ -311,7 +309,7 @@ body {
 }
 #add-order-form h4 {
     margin-bottom: 10px;
-    color: #00b4d8;
+    color: #ff6b6b;
     font-size: 1.1rem;
     font-weight: bold;
     text-align: center;
@@ -329,7 +327,7 @@ body {
 }
 #add-order-form input:focus,
 #add-order-form textarea:focus {
-    border-color: #1de9b6;
+    border-color: #ff6b6b;
     outline: none;
     background: #fff;
 }
@@ -338,7 +336,7 @@ body {
     resize: vertical;
 }
 #add-order-form button[type="submit"] {
-    background: #1976d2;
+    background: linear-gradient(135deg, #ff6b9d 0%, #ff8e53 100%);
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -347,14 +345,15 @@ body {
     margin-top: 8px;
     margin-bottom: 0;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.3s ease;
     font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 #add-order-form button[type="submit"]:hover {
-    background: #0d47a1;
+    background: linear-gradient(135deg, #e53e3e 0%, #dd6b20 100%);
+    transform: translateY(-1px);
 }
 #add-order-form button[type="button"] {
-    background: #ff9800;
+    background: #fbb439;
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -366,21 +365,22 @@ body {
     font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 #add-order-form button[type="button"]:hover {
-    background: #f57c00;
+    background: #ecc94b;
 }
 
-/* Alt button for Nouvelle commande (modern blue) */
+/* Alt button for Nouvelle commande */
 .alt-btn {
-    background: #1976d2 !important;
+    background: linear-gradient(135deg, #ff6b9d 0%, #ff8e53 100%) !important;
     color: #fff !important;
     font-weight: 700;
     letter-spacing: 0.04em;
-    box-shadow: 0 2px 8px rgba(25,118,210,0.08);
-    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(255,107,157,0.3);
+    transition: all 0.3s ease;
 }
 .alt-btn:hover {
-    background: #0d47a1 !important;
-    box-shadow: 0 4px 16px rgba(25,118,210,0.15);
+    background: linear-gradient(135deg, #e53e3e 0%, #dd6b20 100%) !important;
+    box-shadow: 0 4px 16px rgba(255,107,157,0.4);
+    transform: translateY(-2px);
 }
 
 .order-actions {
@@ -398,10 +398,10 @@ body {
     border-radius: 6px;
     font-size: 1.1rem;
     font-weight: 600;
-    background: #f4f6fb;
-    color: #1976d2;
+    background: #fff5f5;
+    color: #e53e3e;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -410,35 +410,35 @@ body {
     font-size: 1.2em;
 }
 .order-action-btn:hover {
-    background: #e3f2fd;
-    color: #0d47a1;
+    background: #fed7d7;
+    color: #c53030;
 }
 .order-action-btn.start-confirmation {
-    background: #00b4d8;
-    color: #1976d2;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+    color: white;
     font-weight: 700;
 }
 .order-action-btn.start-confirmation:hover {
-    background: #1976d2;
-    color: #fff;
+    background: linear-gradient(135deg, #e53e3e 0%, #dd6b20 100%);
+    transform: translateY(-1px);
 }
 .order-action-btn.update-order-btn {
-    background: #ffb300;
+    background: #fbb439;
     color: #fff;
 }
 .order-action-btn.update-order-btn:hover {
-    background: #ff9800;
+    background: #ecc94b;
 }
 .order-action-btn.delete-order-btn {
-    background: #ff5252;
+    background: #e53e3e;
     color: #fff;
 }
 .order-action-btn.delete-order-btn:hover {
-    background: #d32f2f;
+    background: #c53030;
 }
 
 .reset-conversation-btn {
-    background: #ff9800;
+    background: #a0aec0;
     color: white;
     border: none;
     border-radius: 4px;
@@ -449,7 +449,7 @@ body {
 }
 
 .reset-conversation-btn:hover {
-    background: #f57c00;
+    background: #718096;
 }
 
 .reset-conversation-btn span {
