@@ -82,6 +82,8 @@ class OrderConfirmationAgent:
         if not order_data:
             return "Désolé, je ne trouve pas cette commande. Pouvez-vous vérifier le numéro de commande?"
         order = Order(**order_data)
+        if order.status == "confirmed":
+            return "Votre commande a déjà été confirmée. Merci!"
         conversation_data = self.db.get_conversation(order_id)
         if not conversation_data:
             conversation = ConversationState(
@@ -91,6 +93,8 @@ class OrderConfirmationAgent:
             )
         else:
             conversation = ConversationState(**conversation_data)
+        if conversation.current_step == "completed":
+            return "Cette conversation est terminée. Merci!"
         conversation.messages.append({"role": "user", "content": user_input})
         conversation.last_active = datetime.utcnow()
         order_context = self._format_order_context(order, language=language)
@@ -122,45 +126,33 @@ Reply strictly with a JSON in the following format:
 Do not add any text before or after the JSON.
 
 Examples:
-- If the client says "I want to add two more motorcycles", reply:
+- If the client says "Yes" or "Correct", reply with the confirm action and a final closing message:
 {{
-  "message": "I have added 2 more motorcycles to your order. The total has been updated. Is your order now correct?",
+  "message": "Great, your order is confirmed! We are preparing it now.",
+  "action": "confirm",
+  "modification": null
+}}
+- If the client wants to add an item, use the add action:
+{{
+  "message": "I've added 2 more motorcycles to your order. The total has been updated. Is there anything else?",
   "action": "add",
   "modification": {{ "item": "Motorcycle", "quantity": 2, "old_item": null, "new_item": null }}
 }}
-- If the client says "I want to add two motorcycles", reply:
+- If the client wants to modify an item's quantity, use the modify action:
 {{
-  "message": "I have added 2 motorcycles to your order. The total has been updated. Is your order now correct?",
-  "action": "add",
-  "modification": {{ "item": "Motorcycle", "quantity": 2, "old_item": null, "new_item": null }}
-}}
-- If the client says "I want to add 2 more bicycles", reply:
-{{
-  "message": "I have added 2 more bicycles to your order. The total has been updated. Is your order now correct?",
-  "action": "add",
-  "modification": {{ "item": "Bicycle", "quantity": 2, "old_item": null, "new_item": null }}
-}}
-- If the client says "I want to set the total to 2 bicycles", reply:
-{{
-  "message": "The total number of bicycles in your order is now 2. Is your order now correct?",
+  "message": "The total number of bicycles in your order is now 2. Does that look right?",
   "action": "modify",
   "modification": {{ "item": "Bicycle", "quantity": 2, "old_item": null, "new_item": null }}
 }}
-- If the client says "I want to add Pizza x1", reply:
+- If the client wants to replace an item, use the replace action with old_item and new_item:
 {{
-  "message": "I have added Pizza x1 to your order. The total has been updated. Is your order now correct?",
-  "action": "add",
-  "modification": {{ "item": "Pizza", "quantity": 1, "old_item": null, "new_item": null }}
-}}
-- If the client says "I want to replace Lasagna with Pizza", reply:
-{{
-  "message": "Lasagna has been replaced by Pizza in your order.",
+  "message": "Lasagna has been replaced by Pizza in your order. Anything else?",
   "action": "replace",
-  "modification": {{ "old_item": "Lasagna", "new_item": "Pizza", "item": null }}
+  "modification": {{ "old_item": "Lasagna", "new_item": "Pizza", "item": null, "quantity": null }}
 }}
-- If the client says "Thank you", reply:
+- If the client says "Thank you", reply with the none action:
 {{
-  "message": "Thank you! Feel free to contact us if you need anything else.",
+  "message": "You're welcome! Feel free to contact us if you need anything else.",
   "action": "none",
   "modification": null
 }}
@@ -191,43 +183,31 @@ Réponds avec un JSON strictement de la forme :
 Ne mets aucun texte avant ou après le JSON.
 
 Exemples :
-- Si le client dit "Non, c'est tout", réponds :
+- Si le client dit "Non, c'est tout" ou "Oui", réponds avec l'action de confirmation et un message de clôture final:
 {{
-  "message": "Merci, votre commande est confirmée.",
+  "message": "Merci, votre commande est confirmée. Nous la préparons maintenant.",
   "action": "confirm",
   "modification": null
 }}
-- Si le client dit "Oui", réponds :
+- Si le client veut ajouter un article, utilise l'action d'ajout:
 {{
-  "message": "Parfait, nous procédons à la préparation.",
-  "action": "confirm",
-  "modification": null
-}}
-- Si le client dit "Je veux ajouter 2 vélos supplémentaires", réponds :
-{{
-  "message": "J'ai ajouté 2 vélos supplémentaires à votre commande. Le total a été mis à jour. Est-ce que votre commande est correcte maintenant ?",
+  "message": "J'ai ajouté 2 vélos supplémentaires à votre commande. Le total a été mis à jour. Est-ce qu'il y a autre chose?",
   "action": "add",
   "modification": {{ "item": "Bicycle", "quantity": 2, "old_item": null, "new_item": null }}
 }}
-- Si le client dit "Je veux que le total soit de 2 vélos", réponds :
+- Si le client veut modifier la quantité d'un article, utilise l'action de modification:
 {{
-  "message": "Le nombre total de vélos dans votre commande est maintenant 2. Est-ce que votre commande est correcte maintenant ?",
+  "message": "Le nombre total de vélos dans votre commande est maintenant 2. Est-ce que tout est en ordre?",
   "action": "modify",
   "modification": {{ "item": "Bicycle", "quantity": 2, "old_item": null, "new_item": null }}
 }}
-- Si le client dit "Je veux ajouter Pizza x1", réponds :
+- Si le client veut remplacer un article, utilise l'action de remplacement avec old_item et new_item:
 {{
-  "message": "J'ai ajouté Pizza x1 à votre commande. Le total a été mis à jour. Est-ce que votre commande est correcte maintenant ?",
-  "action": "add",
-  "modification": {{ "item": "Pizza", "quantity": 1, "old_item": null, "new_item": null }}
-}}
-- Si le client dit "Je veux remplacer Lasagna par Pizza", réponds :
-{{
-  "message": "Lasagna a été remplacé par Pizza dans votre commande.",
+  "message": "Lasagna a été remplacé par Pizza dans votre commande. Y a-t-il autre chose?",
   "action": "replace",
-  "modification": {{ "old_item": "Lasagna", "new_item": "Pizza", "item": null }}
+  "modification": {{ "old_item": "Lasagna", "new_item": "Pizza", "item": null, "quantity": null }}
 }}
-- Si le client dit "Merci", réponds :
+- Si le client dit "Merci", réponds avec l'action 'none':
 {{
   "message": "Merci à vous ! N'hésitez pas à nous recontacter si besoin.",
   "action": "none",
@@ -253,6 +233,11 @@ Exemples :
             data = json.loads(cleaned_json)
             # If the LLM action is confirm, update the order status
             if data.get("action") == "confirm":
+                if language.startswith("en"):
+                    final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
+                else:
+                    final_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
+                
                 self.db.update_order(
                     order_id,
                     {
@@ -261,10 +246,10 @@ Exemples :
                     }
                 )
                 # Move conversation to final state after confirmation
-                conversation.messages.append({"role": "assistant", "content": data["message"]})
+                conversation.messages.append({"role": "assistant", "content": final_message})
                 conversation.current_step = "completed"
                 self.db.update_conversation(order_id, conversation.dict())
-                return data["message"]
+                return final_message
             elif data.get("action") == "cancel":
                 self.db.update_order(
                     order_id,
@@ -334,6 +319,7 @@ Exemples :
                 existing_item.quantity += quantity_to_add
             else:
                 price = 0
+                # Try to find a similar item to get its price from the current order items
                 for item in order.items:
                     if item.name.lower() == item_name_to_add.lower():
                         price = item.price
@@ -346,15 +332,25 @@ Exemples :
                 ))
         elif action in {"remove"} and modification.get("item"):
             order.items = [item for item in order.items if item.name != modification["item"]]
-        elif action in {"replace", "modify"} and modification.get("old_item") and modification.get("new_item"):
+        elif action in {"replace", "modify"} and modification.get("old_item"):
             old_item_name = modification["old_item"]
+            new_item_name = modification.get("new_item") or modification.get("item")
+            if not new_item_name:
+                print(f"[WARN] Replace action for '{old_item_name}' failed: new item not specified.")
+                return
             item_names = [item.name for item in order.items]
-            closest = get_close_matches(old_item_name, item_names, n=1, cutoff=0.6)
-            if closest:
-                for item in order.items:
-                    if item.name == closest[0]:
-                        item.name = modification["new_item"]
-                        break
+            closest_match = get_close_matches(old_item_name, item_names, n=1, cutoff=0.6)
+            if closest_match:
+                actual_old_item_name = closest_match[0]
+                old_item_instance = next((i for i in order.items if i.name == actual_old_item_name), None)
+                if not old_item_instance:
+                    return
+                new_item_instance = next((i for i in order.items if i.name.lower() == new_item_name.lower() and i.name != actual_old_item_name), None)
+                if new_item_instance:
+                    new_item_instance.quantity += old_item_instance.quantity
+                    order.items = [i for i in order.items if i.name != actual_old_item_name]
+                else:
+                    old_item_instance.name = new_item_name
         elif action == "remove" and modification.get("item"):
             item_name_to_remove = modification["item"]
             quantity_to_remove = modification.get("quantity", 1)
