@@ -33,4 +33,5 @@ class ConversationState(BaseModel):
     confirmed_items: List[Dict] = []
     issues_found: List[str] = []
     modification_request: Optional[Dict] = None
+    last_modification: Optional[tuple] = None
     last_active: datetime = Field(default_factory=datetime.utcnow) 

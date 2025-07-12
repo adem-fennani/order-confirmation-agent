@@ -260,24 +260,31 @@ Exemples :
                 )
             # Handle action if needed (e.g., apply modification)
             if data.get("action") in {"modify", "replace", "remove", "add"} and data.get("modification"):
-                self._apply_llm_modification(order_id, order, data["modification"], data["action"], user_input)
-                # Fetch updated order and override message with real state
-                updated_order_data = self.db.get_order(order_id)
-                if isinstance(updated_order_data, str) and updated_order_data is not None:
-                    try:
-                        updated_order_data = json.loads(updated_order_data)
-                    except Exception as e:
-                        print(f"[ERROR] Could not parse updated_order_data: {e}")
-                        updated_order_data = None
-                if isinstance(updated_order_data, dict):
-                    updated_order = Order(**updated_order_data)
-                    items_str = ", ".join([f"{item.name} x{item.quantity}" for item in updated_order.items])
-                    total = updated_order.total_amount
+                applied_successfully = self._apply_llm_modification(order_id, order, data["modification"], data["action"], user_input)
+                if not applied_successfully:
+                    # If the modification failed, the LLM probably misunderstood. Ask for clarification.
                     if language.startswith("en"):
-                        confirmation_message = f"Your order now contains: {items_str}. The total is {total}€. Is your order now correct?"
+                        data["message"] = "I'm sorry, I didn't understand that. Could you please clarify your request?"
                     else:
-                        confirmation_message = f"Votre commande contient maintenant : {items_str}. Le total est de {total}€. Est-ce correct ?"
-                    data["message"] = confirmation_message
+                        data["message"] = "Je suis désolé, je n'ai pas compris. Pouvez-vous clarifier votre demande ?"
+                else:
+                    # Fetch updated order and override message with real state
+                    updated_order_data = self.db.get_order(order_id)
+                    if isinstance(updated_order_data, str) and updated_order_data is not None:
+                        try:
+                            updated_order_data = json.loads(updated_order_data)
+                        except Exception as e:
+                            print(f"[ERROR] Could not parse updated_order_data: {e}")
+                            updated_order_data = None
+                    if isinstance(updated_order_data, dict):
+                        updated_order = Order(**updated_order_data)
+                        items_str = ", ".join([f"{item.name} x{item.quantity}" for item in updated_order.items])
+                        total = updated_order.total_amount
+                        if language.startswith("en"):
+                            confirmation_message = f"Your order now contains: {items_str}. The total is {total}€. Is your order now correct?"
+                        else:
+                            confirmation_message = f"Votre commande contient maintenant : {items_str}. Le total est de {total}€. Est-ce correct ?"
+                        data["message"] = confirmation_message
             # Save conversation state
             conversation.messages.append({"role": "assistant", "content": data["message"]})
             self.db.update_conversation(order_id, conversation.dict())
@@ -286,88 +293,162 @@ Exemples :
             print(f"[LLM PARSE ERROR] {e}")
             raise
 
-    def _apply_llm_modification(self, order_id, order, modification, action, user_input=None):
-        """Apply the modification as instructed by the LLM. Also parse the user input for numbers to validate quantity."""
-        from difflib import get_close_matches
-        import re
-        def extract_add_quantity(text):
-            # Lowercase for easier matching
-            t = text.lower() if text else ''
-            # Match 'add X more', 'add X', 'add another', 'add one more', etc.
-            patterns = [
-                (r'add (\d+) more', lambda m: int(m.group(1))),
-                (r'add (\d+)', lambda m: int(m.group(1))),
-                (r'add another', lambda m: 1),
-                (r'add one more', lambda m: 1),
-                (r'add one', lambda m: 1),
-                (r'add a(n)? other', lambda m: 1),
-            ]
-            for pat, func in patterns:
-                m = re.search(pat, t)
-                if m:
-                    print(f"[DEBUG] Matched pattern '{pat}' in user input: '{text}'")
-                    return func(m)
-            return None
-        if action == "add" and modification.get("item"):
-            item_name_to_add = modification["item"]
-            llm_quantity = modification.get("quantity", 1)
-            user_quantity = extract_add_quantity(user_input) if user_input else None
-            quantity_to_add = user_quantity if user_quantity is not None else llm_quantity
-            print(f"[DEBUG] LLM suggested quantity: {llm_quantity}, User parsed quantity: {user_quantity}, Final used: {quantity_to_add}")
-            existing_item = next((item for item in order.items if item.name.lower() == item_name_to_add.lower()), None)
-            if existing_item:
-                existing_item.quantity += quantity_to_add
+    def _normalize_modification(self, modification):
+        """
+        Normalize any LLM modification dict to a canonical format:
+        {"action": ..., "old_item": ..., "new_item": ..., "old_qty": ..., "new_qty": ...}
+        For 'replace' with a 'quantity' field, always treat as: remove old_item (1 or specified), add new_item with the specified quantity.
+        """
+        mod = modification
+        norm = {"action": None, "old_item": None, "new_item": None, "old_qty": 1, "new_qty": 1}
+        # 1. quantity dict (delta)
+        if isinstance(mod.get('quantity'), dict):
+            for name, delta in mod['quantity'].items():
+                if delta < 0:
+                    norm["action"] = "remove"
+                    norm["old_item"] = name
+                    norm["old_qty"] = abs(delta)
+                elif delta > 0:
+                    norm["action"] = "add"
+                    norm["new_item"] = name
+                    norm["new_qty"] = delta
+            return norm
+        # 2. oldItem/newItem with articleName or name
+        if ("oldItem" in mod and "newItem" in mod):
+            old = mod["oldItem"]
+            new = mod["newItem"]
+            norm["action"] = "replace"
+            norm["old_item"] = old.get("articleName") or old.get("name")
+            norm["old_qty"] = old.get("quantity", 1)
+            norm["new_item"] = new.get("articleName") or new.get("name")
+            norm["new_qty"] = new.get("quantity", 1)
+            return norm
+        # 3. old/new with article_name
+        if ("old" in mod and "new" in mod):
+            old = mod["old"]
+            new = mod["new"]
+            norm["action"] = "replace"
+            norm["old_item"] = old.get("article_name")
+            norm["old_qty"] = old.get("quantity", 1)
+            norm["new_item"] = new.get("article_name")
+            norm["new_qty"] = new.get("quantity", 1)
+            return norm
+        # 4. product/new_product
+        if ("product" in mod and "new_product" in mod):
+            norm["action"] = "replace"
+            norm["old_item"] = mod["product"]
+            norm["new_item"] = mod["new_product"]
+            norm["old_qty"] = mod.get("quantity", 1)
+            norm["new_qty"] = mod.get("quantity", 1)
+            return norm
+        # 5. article_old/article_new
+        if ("article_old" in mod and "article_new" in mod):
+            old = mod["article_old"]
+            new = mod["article_new"]
+            norm["action"] = "replace"
+            norm["old_item"] = old.get("name")
+            norm["old_qty"] = old.get("quantity", 1)
+            norm["new_item"] = new.get("name")
+            norm["new_qty"] = new.get("quantity", 1)
+            return norm
+        # 6. item_id_to_remove/article_id_to_remove
+        if "item_id_to_remove" in mod or "article_id_to_remove" in mod:
+            norm["action"] = "remove"
+            norm["old_item"] = mod.get("item_id_to_remove") or mod.get("article_id_to_remove")
+            norm["old_qty"] = mod.get("quantity", 1)
+            return norm
+        # 8. old_item/new_item (handle 'replace' with quantity)
+        if "old_item" in mod and ("new_item" in mod or "item" in mod):
+            norm["action"] = "replace"
+            norm["old_item"] = mod["old_item"]
+            norm["new_item"] = mod.get("new_item") or mod.get("item")
+            # If 'quantity' is present, treat as: remove old_item (1 or specified), add new_item with that quantity
+            if "quantity" in mod and mod["quantity"]:
+                norm["old_qty"] = 1
+                norm["new_qty"] = mod["quantity"]
             else:
-                price = 0
-                # Try to find a similar item to get its price from the current order items
-                for item in order.items:
-                    if item.name.lower() == item_name_to_add.lower():
-                        price = item.price
-                        break
-                order.items.append(OrderItem(
-                    name=item_name_to_add,
-                    quantity=quantity_to_add,
-                    price=price,
-                    notes='Ajouté via LLM'
-                ))
-        elif action in {"remove"} and modification.get("item"):
-            order.items = [item for item in order.items if item.name != modification["item"]]
-        elif action in {"replace", "modify"} and modification.get("old_item"):
-            old_item_name = modification["old_item"]
-            new_item_name = modification.get("new_item") or modification.get("item")
-            if not new_item_name:
-                print(f"[WARN] Replace action for '{old_item_name}' failed: new item not specified.")
-                return
-            item_names = [item.name for item in order.items]
-            closest_match = get_close_matches(old_item_name, item_names, n=1, cutoff=0.6)
-            if closest_match:
-                actual_old_item_name = closest_match[0]
-                old_item_instance = next((i for i in order.items if i.name == actual_old_item_name), None)
-                if not old_item_instance:
-                    return
-                new_item_instance = next((i for i in order.items if i.name.lower() == new_item_name.lower() and i.name != actual_old_item_name), None)
-                if new_item_instance:
-                    new_item_instance.quantity += old_item_instance.quantity
-                    order.items = [i for i in order.items if i.name != actual_old_item_name]
-                else:
-                    old_item_instance.name = new_item_name
-        elif action == "remove" and modification.get("item"):
-            item_name_to_remove = modification["item"]
-            quantity_to_remove = modification.get("quantity", 1)
-            
-            existing_item = next((item for item in order.items if item.name.lower() == item_name_to_remove.lower()), None)
+                norm["old_qty"] = 1
+                norm["new_qty"] = 1
+            return norm
+        # 7. item/article_id_to_add
+        if "item" in mod or "article_id_to_add" in mod:
+            norm["action"] = "add"
+            norm["new_item"] = mod.get("item") or mod.get("article_id_to_add")
+            norm["new_qty"] = mod.get("quantity", 1)
+            return norm
+        print(f"[WARN] Could not normalize LLM modification: {mod}")
+        return norm
 
-            if existing_item:
-                existing_item.quantity -= quantity_to_remove
-                if existing_item.quantity <= 0:
-                    order.items = [item for item in order.items if item.name.lower() != item_name_to_remove.lower()]
+    def _apply_llm_modification(self, order_id, order, modification, action, user_input=None) -> bool:
+        """Apply the modification as instructed by the LLM. Uses normalized canonical format. Prevents duplicate modifications."""
+        norm = self._normalize_modification(modification)
+        print(f"[NORM] Normalized modification: {norm}")
+        # --- Prevent duplicate modifications ---
+        conversation_data = self.db.get_conversation(order_id)
+        if conversation_data:
+            conversation = ConversationState(**conversation_data)
+            last_mod = getattr(conversation, 'last_modification', None)
+            # Use a tuple for easy comparison
+            current_mod_tuple = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"])
+            if last_mod == current_mod_tuple:
+                print(f"[WARN] Duplicate modification detected, skipping: {current_mod_tuple}")
+                return False
+        else:
+            conversation = None
+            last_mod = None
+        applied = False
+        if norm["action"] == "replace" and norm["old_item"] and norm["new_item"]:
+            # Remove old item(s)
+            for _ in range(norm["old_qty"]):
+                for item in order.items:
+                    if item.name.lower() == norm["old_item"].lower():
+                        item.quantity -= 1
+                        if item.quantity <= 0:
+                            order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
+                        break
+            # Add new item(s)
+            existing = next((item for item in order.items if item.name.lower() == norm["new_item"].lower()), None)
+            if existing:
+                existing.quantity += norm["new_qty"]
             else:
-                # If item not found, do nothing or log a warning
-                pass
+                order.items.append(OrderItem(
+                    name=norm["new_item"],
+                    quantity=norm["new_qty"],
+                    price=0,
+                    notes='Ajouté via LLM (replace)'))
+            applied = True
+        elif norm["action"] == "add" and norm["new_item"]:
+            existing = next((item for item in order.items if item.name.lower() == norm["new_item"].lower()), None)
+            if existing:
+                existing.quantity += norm["new_qty"]
+            else:
+                order.items.append(OrderItem(
+                    name=norm["new_item"],
+                    quantity=norm["new_qty"],
+                    price=0,
+                    notes='Ajouté via LLM (add)'))
+            applied = True
+        elif norm["action"] == "remove" and norm["old_item"]:
+            for _ in range(norm["old_qty"]):
+                for item in order.items:
+                    if item.name.lower() == norm["old_item"].lower():
+                        item.quantity -= 1
+                        if item.quantity <= 0:
+                            order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
+                        break
+            applied = True
+        if not applied:
+            print(f"[WARN] Could not apply normalized modification: {norm}")
+            return False
         self.db.update_order(order_id, {
             'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
             'total_amount': sum(item.price * item.quantity for item in order.items)
         })
+        # --- Store last modification in conversation state ---
+        if conversation:
+            conversation.last_modification = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"])
+            self.db.update_conversation(order_id, conversation.dict())
+        return True
 
     def process_message_basic(self, order_id: str, user_input: str) -> str:
         # The old rule-based logic, unchanged. Just call the previous process_message logic here if fallback is needed.
@@ -822,4 +903,4 @@ Ne mets aucun texte avant ou après le JSON.
                     return 'en'
                 if any(word in text.lower() for word in ['le', 'la', 'et', 'commande', 'ajouter', 'oui', 'non']):
                     return 'fr'
-        return 'fr'   
+        return 'fr'    
