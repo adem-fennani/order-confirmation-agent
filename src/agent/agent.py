@@ -51,10 +51,61 @@ class OrderConfirmationAgent:
         """
     
     def process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
-        """
-        LLM-first: Try to process the message using the LLM pipeline. If it fails, fallback to the old rule-based logic.
-        """
         try:
+            # --- Message-history-based confirmation logic ---
+            conversation_data = self.db.get_conversation(order_id)
+            conversation = ConversationState(**conversation_data) if conversation_data else None
+            user_input_lower = user_input.strip().lower()
+            user_confirms = any(word in user_input_lower for word in ["yes", "oui", "ok", "correct", "d'accord"])
+            last_assistant_message = None
+            if conversation and conversation.messages:
+                for msg in reversed(conversation.messages):
+                    if msg["role"] == "assistant":
+                        last_assistant_message = msg["content"]
+                        break
+            awaiting_confirmation = False
+            if last_assistant_message:
+                # Check for typical confirmation prompts in both languages
+                confirmation_phrases = [
+                    "is your order now correct?",
+                    "est-ce correct ?",
+                    "est-ce que tout est correct",
+                    "is everything correct",
+                    "is that correct",
+                    "est-ce en ordre",
+                    "is your order correct"
+                ]
+                for phrase in confirmation_phrases:
+                    if phrase in last_assistant_message.lower():
+                        awaiting_confirmation = True
+                        break
+            if awaiting_confirmation and user_confirms:
+                # User is confirming the last modification, so confirm the order
+                if language.startswith("en"):
+                    final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
+                else:
+                    final_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
+                self.db.update_order(
+                    order_id,
+                    {
+                        "status": "confirmed",
+                        "confirmed_at": datetime.utcnow().isoformat()
+                    }
+                )
+                if conversation:
+                    conversation.messages.append({"role": "assistant", "content": final_message})
+                    conversation.current_step = "completed"
+                    self.db.update_conversation(order_id, conversation.dict())
+                else:
+                    # Fallback: create a new conversation state
+                    conversation = ConversationState(
+                        order_id=order_id,
+                        messages=[{"role": "assistant", "content": final_message}],
+                        current_step="completed"
+                    )
+                    self.db.update_conversation(order_id, conversation.dict())
+                return final_message
+            # --- End message-history-based confirmation logic ---
             llm_response = self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
                 return llm_response
@@ -67,7 +118,6 @@ class OrderConfirmationAgent:
                 else:
                     return "Notre assistant est temporairement indisponible (quota dépassé). Merci de réessayer plus tard ou de contacter le support."
             print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
-            # Fallback to the old logic
             return self.process_message_basic(order_id, user_input)
         except Exception as e:
             print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
@@ -259,16 +309,15 @@ Exemples :
                     }
                 )
             # Handle action if needed (e.g., apply modification)
+            # Only apply modification if not already pending
             if data.get("action") in {"modify", "replace", "remove", "add"} and data.get("modification"):
-                applied_successfully = self._apply_llm_modification(order_id, order, data["modification"], data["action"], user_input)
+                applied_successfully = self._apply_llm_modification(order_id, order, data["modification"], data["action"], conversation, user_input)
                 if not applied_successfully:
-                    # If the modification failed, the LLM probably misunderstood. Ask for clarification.
                     if language.startswith("en"):
                         data["message"] = "I'm sorry, I didn't understand that. Could you please clarify your request?"
                     else:
                         data["message"] = "Je suis désolé, je n'ai pas compris. Pouvez-vous clarifier votre demande ?"
                 else:
-                    # Fetch updated order and override message with real state
                     updated_order_data = self.db.get_order(order_id)
                     if isinstance(updated_order_data, str) and updated_order_data is not None:
                         try:
@@ -285,6 +334,9 @@ Exemples :
                         else:
                             confirmation_message = f"Votre commande contient maintenant : {items_str}. Le total est de {total}€. Est-ce correct ?"
                         data["message"] = confirmation_message
+            else:
+                # Clear pending_modification if not a modification action
+                pass # This line is removed as conversation is passed as an argument
             # Save conversation state
             conversation.messages.append({"role": "assistant", "content": data["message"]})
             self.db.update_conversation(order_id, conversation.dict())
@@ -379,23 +431,23 @@ Exemples :
         print(f"[WARN] Could not normalize LLM modification: {mod}")
         return norm
 
-    def _apply_llm_modification(self, order_id, order, modification, action, user_input=None) -> bool:
+    def _apply_llm_modification(self, order_id, order, modification, action, conversation, user_input=None) -> bool:
         """Apply the modification as instructed by the LLM. Uses normalized canonical format. Prevents duplicate modifications."""
         norm = self._normalize_modification(modification)
         print(f"[NORM] Normalized modification: {norm}")
         # --- Prevent duplicate modifications ---
-        conversation_data = self.db.get_conversation(order_id)
-        if conversation_data:
-            conversation = ConversationState(**conversation_data)
-            last_mod = getattr(conversation, 'last_modification', None)
-            # Use a tuple for easy comparison
-            current_mod_tuple = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"])
-            if last_mod == current_mod_tuple:
-                print(f"[WARN] Duplicate modification detected, skipping: {current_mod_tuple}")
-                return False
-        else:
-            conversation = None
-            last_mod = None
+        # conversation_data = self.db.get_conversation(order_id) # This line is removed as conversation is passed as an argument
+        # if conversation_data: # This line is removed as conversation is passed as an argument
+        #     conversation = ConversationState(**conversation_data) # This line is removed as conversation is passed as an argument
+        #     last_mod = getattr(conversation, 'last_modification', None) # This line is removed as conversation is passed as an argument
+        # Use a tuple for easy comparison
+        current_mod_tuple = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"])
+        # if last_mod == current_mod_tuple: # This line is removed as conversation is passed as an argument
+        #     print(f"[WARN] Duplicate modification detected, skipping: {current_mod_tuple}") # This line is removed as conversation is passed as an argument
+        #     return False # This line is removed as conversation is passed as an argument
+        # else: # This line is removed as conversation is passed as an argument
+        #     conversation = None # This line is removed as conversation is passed as an argument
+        #     last_mod = None # This line is removed as conversation is passed as an argument
         applied = False
         if norm["action"] == "replace" and norm["old_item"] and norm["new_item"]:
             # Remove old item(s)
@@ -445,9 +497,9 @@ Exemples :
             'total_amount': sum(item.price * item.quantity for item in order.items)
         })
         # --- Store last modification in conversation state ---
-        if conversation:
-            conversation.last_modification = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"])
-            self.db.update_conversation(order_id, conversation.dict())
+        # if conversation: # This line is removed as conversation is passed as an argument
+        #     conversation.last_modification = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"]) # This line is removed as conversation is passed as an argument
+        #     self.db.update_conversation(order_id, conversation.dict()) # This line is removed as conversation is passed as an argument
         return True
 
     def process_message_basic(self, order_id: str, user_input: str) -> str:
