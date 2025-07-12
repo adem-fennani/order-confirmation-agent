@@ -52,7 +52,7 @@ class OrderConfirmationAgent:
     
     def process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
         try:
-            # --- Message-history-based confirmation logic ---
+            # --- Heuristic parsing for user corrections ---
             conversation_data = self.db.get_conversation(order_id)
             conversation = ConversationState(**conversation_data) if conversation_data else None
             user_input_lower = user_input.strip().lower()
@@ -65,7 +65,6 @@ class OrderConfirmationAgent:
                         break
             awaiting_confirmation = False
             if last_assistant_message:
-                # Check for typical confirmation prompts in both languages
                 confirmation_phrases = [
                     "is your order now correct?",
                     "est-ce correct ?",
@@ -79,8 +78,41 @@ class OrderConfirmationAgent:
                     if phrase in last_assistant_message.lower():
                         awaiting_confirmation = True
                         break
+            # Heuristic: if user says 'only want X' or 'seulement X', remove all other items except X
+            import re
+            only_want_match = re.search(r'(only want|seulement|juste)\s+(\d+)?\s*([\w\s]+)', user_input_lower)
+            if only_want_match:
+                qty = only_want_match.group(2)
+                item = only_want_match.group(3).strip()
+                order_data = self.db.get_order(order_id)
+                if order_data:
+                    order = Order(**order_data)
+                    # Remove all items except the specified one
+                    for o_item in order.items:
+                        if o_item.name.lower() != item.lower():
+                            o_item.quantity = 0
+                    # Set the quantity if specified
+                    for o_item in order.items:
+                        if o_item.name.lower() == item.lower():
+                            if qty:
+                                o_item.quantity = int(qty)
+                    # Remove items with quantity 0
+                    order.items = [i for i in order.items if i.quantity > 0]
+                    self.db.update_order(order_id, {
+                        'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
+                        'total_amount': sum(item.price * item.quantity for item in order.items)
+                    })
+                    items_str = ", ".join([f"{item.name} x{item.quantity}" for item in order.items])
+                    total = sum(item.price * item.quantity for item in order.items)
+                    if language.startswith("en"):
+                        confirmation_message = f"Your order now contains: {items_str}. The total is {total}€. Is your order now correct?"
+                    else:
+                        confirmation_message = f"Votre commande contient maintenant : {items_str}. Le total est de {total}€. Est-ce correct ?"
+                    if conversation:
+                        conversation.messages.append({"role": "assistant", "content": confirmation_message})
+                        self.db.update_conversation(order_id, conversation.dict())
+                    return confirmation_message
             if awaiting_confirmation and user_confirms:
-                # User is confirming the last modification, so confirm the order
                 if language.startswith("en"):
                     final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
                 else:
@@ -97,7 +129,6 @@ class OrderConfirmationAgent:
                     conversation.current_step = "completed"
                     self.db.update_conversation(order_id, conversation.dict())
                 else:
-                    # Fallback: create a new conversation state
                     conversation = ConversationState(
                         order_id=order_id,
                         messages=[{"role": "assistant", "content": final_message}],
@@ -154,7 +185,19 @@ class OrderConfirmationAgent:
             language_instruction = (
                 "Always reply in English, matching the user's message language. "
                 "The user may switch between French and English (or other languages) at any time. "
-                f"Detected language for this message: {language}."
+                f"Detected language for this message: {language}.\n"
+                "STRICT JSON RULES: Use ONLY these keys: message, action, modification, old_item, new_item, item, quantity.\n"
+                "NEVER invent new keys (e.g., quantity_new, old_quantity, etc).\n"
+                "ALWAYS use double quotes for all property names and string values.\n"
+                "NEVER use single quotes. NEVER add trailing commas.\n"
+                "If a field is not needed, set it to null.\n"
+                "If you are unsure, ask for clarification.\n"
+                "If you cannot parse the user's intent, reply with action: 'none'.\n"
+                "NEGATIVE EXAMPLES (DO NOT DO THIS):\n"
+                "{ 'message': '...', 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity_new': 2 } }\n"
+                "{\"message\": \"...\", 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity': 2, } }\n"
+                "POSITIVE EXAMPLES (DO THIS):\n"
+                "{\"message\": \"...\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Table\", \"new_item\": \"Chair\", \"quantity\": 2, \"item\": null} }\n"
             )
             prompt = f"""
 {language_instruction}
@@ -211,7 +254,19 @@ Examples:
             language_instruction = (
                 "Réponds toujours en français, en accord avec la langue du message de l'utilisateur. "
                 "L'utilisateur peut passer du français à l'anglais (ou à d'autres langues) à tout moment. "
-                f"Langue détectée pour ce message : {language}."
+                f"Langue détectée pour ce message : {language}.\n"
+                "RÈGLES STRICTES JSON : Utilise UNIQUEMENT ces clés : message, action, modification, old_item, new_item, item, quantity.\n"
+                "NE JAMAIS inventer de nouvelles clés (ex: quantity_new, old_quantity, etc).\n"
+                "TOUJOURS utiliser des guillemets doubles pour tous les noms de propriété et valeurs de chaîne.\n"
+                "NE JAMAIS utiliser de guillemets simples. NE JAMAIS ajouter de virgule finale.\n"
+                "Si un champ n'est pas utile, mets-le à null.\n"
+                "Si tu n'es pas sûr, demande une clarification.\n"
+                "Si tu ne peux pas comprendre l'intention de l'utilisateur, réponds avec action: 'none'.\n"
+                "EXEMPLES NÉGATIFS (À NE PAS FAIRE) :\n"
+                "{ 'message': '...', 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity_new': 2 } }\n"
+                "{\"message\": \"...\", 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity': 2, } }\n"
+                "EXEMPLES POSITIFS (À FAIRE) :\n"
+                "{\"message\": \"...\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Table\", \"new_item\": \"Chair\", \"quantity\": 2, \"item\": null} }\n"
             )
             prompt = f"""
 {language_instruction}
@@ -268,19 +323,38 @@ Exemples :
             llm_raw = call_llm(prompt, max_tokens=256)
             print("[LLM RAW]", llm_raw)
             json_str = llm_raw.strip()
-            # Replace smart quotes with standard quotes
-            json_str = json_str.replace('"', '"').replace("'", "'")
-            json_str = json_str.replace("'", "'")
-            # Remove trailing commas before closing braces/brackets
-            json_str = re.sub(r',([ \t\r\n]*[}}]])', r'\1', json_str)
-            # Remove non-breaking spaces and invisible characters
-            json_str = json_str.replace('\u00A0', ' ')
-            match = re.search(r'\{.*\}', json_str, re.DOTALL)
-            if not match:
-                raise ValueError("No JSON found in LLM output")
-            cleaned_json = match.group(0)
-            print("[LLM CLEANED JSON]", cleaned_json)
-            data = json.loads(cleaned_json)
+            # Robust JSON repair/validation
+            import re, json
+            def repair_json(s):
+                # Replace single quotes with double quotes
+                s = re.sub(r"'", '"', s)
+                # Remove trailing commas before closing braces/brackets
+                s = re.sub(r',([ \t\r\n]*[}}\]])', r'\1', s)
+                # Remove non-breaking spaces and invisible characters
+                s = s.replace('\u00A0', ' ')
+                # Remove unquoted property names (rare)
+                s = re.sub(r'([,{\[])(\s*)([a-zA-Z0-9_]+)(\s*):', r'\1\2"\3"\4:', s)
+                return s
+            try:
+                match = re.search(r'\{.*\}', json_str, re.DOTALL)
+                if not match:
+                    raise ValueError("No JSON found in LLM output")
+                cleaned_json = repair_json(match.group(0))
+                print("[LLM CLEANED JSON]", cleaned_json)
+                data = json.loads(cleaned_json)
+            except Exception as e:
+                print(f"[LLM PARSE ERROR] {e}")
+                # Fallback: try to extract action and modification fields with regex
+                action_match = re.search(r'"action"\s*:\s*"(\w+)"', json_str)
+                mod_match = re.search(r'"modification"\s*:\s*(\{.*?\})', json_str, re.DOTALL)
+                data = {"action": None, "modification": None, "message": "[LLM parse fallback]"}
+                if action_match:
+                    data["action"] = action_match.group(1)
+                if mod_match:
+                    try:
+                        data["modification"] = json.loads(repair_json(mod_match.group(1)))
+                    except Exception:
+                        data["modification"] = None
             # If the LLM action is confirm, update the order status
             if data.get("action") == "confirm":
                 if language.startswith("en"):
@@ -450,15 +524,9 @@ Exemples :
         #     last_mod = None # This line is removed as conversation is passed as an argument
         applied = False
         if norm["action"] == "replace" and norm["old_item"] and norm["new_item"]:
-            # Remove old item(s)
-            for _ in range(norm["old_qty"]):
-                for item in order.items:
-                    if item.name.lower() == norm["old_item"].lower():
-                        item.quantity -= 1
-                        if item.quantity <= 0:
-                            order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
-                        break
-            # Add new item(s)
+            # Always remove the old item completely
+            order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
+            # Add new item(s) with the specified quantity
             existing = next((item for item in order.items if item.name.lower() == norm["new_item"].lower()), None)
             if existing:
                 existing.quantity += norm["new_qty"]
