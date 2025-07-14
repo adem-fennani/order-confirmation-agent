@@ -262,11 +262,23 @@ Examples:
                 "Si un champ n'est pas utile, mets-le à null.\n"
                 "Si tu n'es pas sûr, demande une clarification.\n"
                 "Si tu ne peux pas comprendre l'intention de l'utilisateur, réponds avec action: 'none'.\n"
+                "\n"
                 "EXEMPLES NÉGATIFS (À NE PAS FAIRE) :\n"
                 "{ 'message': '...', 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity_new': 2 } }\n"
                 "{\"message\": \"...\", 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity': 2, } }\n"
+                "\n"
                 "EXEMPLES POSITIFS (À FAIRE) :\n"
                 "{\"message\": \"...\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Table\", \"new_item\": \"Chair\", \"quantity\": 2, \"item\": null} }\n"
+                "\n"
+                "CAS D'USAGE SUPPLÉMENTAIRES :\n"
+                "- Ajouter 3 pizzas : {\"message\": \"3 pizzas ont été ajoutées à votre commande.\", \"action\": \"add\", \"modification\": {\"item\": \"Pizza\", \"quantity\": 3, \"old_item\": null, \"new_item\": null}}\n"
+                "- Retirer 2 salades : {\"message\": \"2 salades ont été retirées de votre commande.\", \"action\": \"remove\", \"modification\": {\"item\": \"Salade\", \"quantity\": 2, \"old_item\": null, \"new_item\": null}}\n"
+                "- Modifier la quantité de burger de 2 à 5 : {\"message\": \"La quantité de burgers est maintenant 5.\", \"action\": \"modify\", \"modification\": {\"item\": \"Burger\", \"quantity\": 5, \"old_item\": null, \"new_item\": null}}\n"
+                "- Remplacer 2 lasagnes par 3 pizzas : {\"message\": \"2 lasagnes ont été remplacées par 3 pizzas.\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Lasagne\", \"old_quantity\": 2, \"new_item\": \"Pizza\", \"new_quantity\": 3, \"item\": null}}\n"
+                "- Annuler la commande : {\"message\": \"Votre commande a été annulée.\", \"action\": \"cancel\", \"modification\": null}\n"
+                "- Demander une clarification : {\"message\": \"Pouvez-vous préciser votre demande ?\", \"action\": \"none\", \"modification\": null}\n"
+                "\n"
+                "Pour chaque action, explique clairement ce qui a été fait et demande une confirmation si nécessaire.\n"
             )
             prompt = f"""
 {language_instruction}
@@ -317,6 +329,24 @@ Exemples :
   "message": "Merci à vous ! N'hésitez pas à nous recontacter si besoin.",
   "action": "none",
   "modification": null
+}}
+- Si le client demande d'annuler la commande:
+{{
+  "message": "Votre commande a été annulée.",
+  "action": "cancel",
+  "modification": null
+}}
+- Si la demande n'est pas claire:
+{{
+  "message": "Pouvez-vous préciser votre demande ?",
+  "action": "none",
+  "modification": null
+}}
+- Si le client veut retirer un article sans le remplacer:
+{{
+  "message": "J'ai retiré 1 article de votre commande. Est-ce correct ?",
+  "action": "remove",
+  "modification": {{ "old_item": "Nom de l'article", "old_qty": 1, "new_item": null, "new_qty": null }}
 }}
 """
         try:
@@ -427,6 +457,32 @@ Exemples :
         """
         mod = modification
         norm = {"action": None, "old_item": None, "new_item": None, "old_qty": 1, "new_qty": 1}
+        # Handle remove with 'item' key (LLM: {"action": "remove", "item": ..., "quantity": ...})
+        if (
+            mod.get('action') == 'remove' or
+            (
+                mod.get('item') and mod.get('quantity') and (
+                    mod.get('action') == 'remove' or
+                    (mod.get('old_item') is None and mod.get('new_item') is None)
+                )
+            )
+        ):
+            norm["action"] = "remove"
+            norm["old_item"] = mod.get("item")
+            norm["old_qty"] = mod.get("quantity", 1)
+            return norm
+        # Handle standard add
+        if mod.get('action') == 'add' or (mod.get('item') and mod.get('quantity')):
+            norm["action"] = "add"
+            norm["new_item"] = mod.get("item")
+            norm["new_qty"] = mod.get("quantity", 1)
+            return norm
+        # Handle standard remove (LLM: {"old_item": ..., "quantity": ...})
+        if mod.get('old_item') and mod.get('quantity') and not mod.get('new_item') and not mod.get('item'):
+            norm["action"] = "remove"
+            norm["old_item"] = mod["old_item"]
+            norm["old_qty"] = mod["quantity"]
+            return norm
         # 1. quantity dict (delta)
         if isinstance(mod.get('quantity'), dict):
             for name, delta in mod['quantity'].items():
@@ -1015,12 +1071,26 @@ Ne mets aucun texte avant ou après le JSON.
 
     def _infer_language_from_conversation(self, conversation):
         # Try to infer language from the last user message
+        import re
         for msg in reversed(conversation.messages):
             if msg['role'] == 'user':
-                # crude heuristic: check for common English or French words
-                text = msg['content']
-                if any(word in text.lower() for word in ['the', 'is', 'and', 'order', 'add', 'yes', 'no']):
+                text = msg['content'].strip()
+                # Heuristic: if message is a single word like 'yes', 'no', etc., check for English/French
+                if re.fullmatch(r"yes|no|ok|correct|thanks|thank you", text.lower()):
                     return 'en'
-                if any(word in text.lower() for word in ['le', 'la', 'et', 'commande', 'ajouter', 'oui', 'non']):
+                if re.fullmatch(r"oui|non|d'accord|merci|parfait", text.lower()):
                     return 'fr'
-        return 'fr'    
+                # Otherwise, use a simple heuristic: more English or French words
+                en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add']
+                fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer']
+                en_count = sum(1 for w in en_words if w in text.lower())
+                fr_count = sum(1 for w in fr_words if w in text.lower())
+                if en_count > fr_count:
+                    return 'en'
+                if fr_count > en_count:
+                    return 'fr'
+                # Fallback: if message contains mostly ascii, guess English
+                if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
+                    return 'en'
+                return 'fr'
+        return 'fr'
