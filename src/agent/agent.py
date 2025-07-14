@@ -79,7 +79,6 @@ class OrderConfirmationAgent:
                         awaiting_confirmation = True
                         break
             # Heuristic: if user says 'only want X' or 'seulement X', remove all other items except X
-            import re
             only_want_match = re.search(r'(only want|seulement|juste)\s+(\d+)?\s*([\w\s]+)', user_input_lower)
             if only_want_match:
                 qty = only_want_match.group(2)
@@ -104,7 +103,9 @@ class OrderConfirmationAgent:
                     })
                     items_str = ", ".join([f"{item.name} x{item.quantity}" for item in order.items])
                     total = sum(item.price * item.quantity for item in order.items)
-                    if language.startswith("en"):
+                    # --- Infer language for confirmation message ---
+                    lang = self._infer_language_from_conversation(conversation) if conversation else language
+                    if lang.startswith("en"):
                         confirmation_message = f"Your order now contains: {items_str}. The total is {total}€. Is your order now correct?"
                     else:
                         confirmation_message = f"Votre commande contient maintenant : {items_str}. Le total est de {total}€. Est-ce correct ?"
@@ -113,7 +114,9 @@ class OrderConfirmationAgent:
                         self.db.update_conversation(order_id, conversation.dict())
                     return confirmation_message
             if awaiting_confirmation and user_confirms:
-                if language.startswith("en"):
+                # --- Infer language for final confirmation ---
+                lang = self._infer_language_from_conversation(conversation) if conversation else language
+                if lang.startswith("en"):
                     final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
                 else:
                     final_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
