@@ -486,6 +486,12 @@ Exemples :
             norm["old_item"] = mod["old_item"]
             norm["old_qty"] = mod["quantity"]
             return norm
+        # Handle remove with 'old_item' and 'old_quantity' (new fix)
+        if mod.get('old_item') and mod.get('old_quantity') and not mod.get('new_item') and not mod.get('item'):
+            norm["action"] = "remove"
+            norm["old_item"] = mod["old_item"]
+            norm["old_qty"] = mod["old_quantity"]
+            return norm
         # 1. quantity dict (delta)
         if isinstance(mod.get('quantity'), dict):
             for name, delta in mod['quantity'].items():
