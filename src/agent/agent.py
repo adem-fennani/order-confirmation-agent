@@ -181,9 +181,27 @@ class OrderConfirmationAgent:
             return "Cette conversation est terminée. Merci!"
         conversation.messages.append({"role": "user", "content": user_input})
         conversation.last_active = datetime.utcnow()
-        order_context = self._format_order_context(order, language=language)
+
+        # Detect language from the current user message
+        def detect_language(text):
+            en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
+            fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
+            en_count = sum(1 for w in en_words if w in text.lower())
+            fr_count = sum(1 for w in fr_words if w in text.lower())
+            if en_count > fr_count:
+                return 'en'
+            if fr_count > en_count:
+                return 'fr'
+            # Fallback: if message contains mostly ascii, guess English
+            if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
+                return 'en'
+            return 'fr'
+
+        detected_language = detect_language(user_input)
+        order_context = self._format_order_context(order, language=detected_language)
         conversation_history = self._format_conversation_history(conversation.messages)
         # Add language instruction and dynamic prompt/examples
+        language = detected_language
         if language.startswith("en"):
             language_instruction = (
                 "Always reply in English, matching the user's message language. "
@@ -379,15 +397,22 @@ Exemples :
                 print(f"[LLM PARSE ERROR] {e}")
                 # Fallback: try to extract action and modification fields with regex
                 action_match = re.search(r'"action"\s*:\s*"(\w+)"', json_str)
-                mod_match = re.search(r'"modification"\s*:\s*(\{.*?\})', json_str, re.DOTALL)
+                mod_match = re.search(r'"modification"\s*:\s*(\{.*?\}|null)', json_str, re.DOTALL)
+                msg_match = re.search(r'"message"\s*:\s*"([^"]*)"', json_str)
                 data = {"action": None, "modification": None, "message": "[LLM parse fallback]"}
                 if action_match:
                     data["action"] = action_match.group(1)
                 if mod_match:
-                    try:
-                        data["modification"] = json.loads(repair_json(mod_match.group(1)))
-                    except Exception:
+                    mod_val = mod_match.group(1)
+                    if mod_val == 'null':
                         data["modification"] = None
+                    else:
+                        try:
+                            data["modification"] = json.loads(repair_json(mod_val))
+                        except Exception:
+                            data["modification"] = None
+                if msg_match:
+                    data["message"] = msg_match.group(1)
             # If the LLM action is confirm, update the order status
             if data.get("action") == "confirm":
                 if language.startswith("en"):
@@ -453,6 +478,10 @@ Exemples :
             raise
 
     def _normalize_modification(self, modification):
+        # Handle cancel action
+        if mod.get('action') == 'cancel':
+            norm['action'] = 'cancel'
+            return norm
         """
         Normalize any LLM modification dict to a canonical format:
         {"action": ..., "old_item": ..., "new_item": ..., "old_qty": ..., "new_qty": ...}
@@ -460,25 +489,18 @@ Exemples :
         """
         mod = modification
         norm = {"action": None, "old_item": None, "new_item": None, "old_qty": 1, "new_qty": 1}
-        # Handle remove with 'item' key (LLM: {"action": "remove", "item": ..., "quantity": ...})
-        if (
-            mod.get('action') == 'remove' or
-            (
-                mod.get('item') and mod.get('quantity') and (
-                    mod.get('action') == 'remove' or
-                    (mod.get('old_item') is None and mod.get('new_item') is None)
-                )
-            )
-        ):
-            norm["action"] = "remove"
-            norm["old_item"] = mod.get("item")
-            norm["old_qty"] = mod.get("quantity", 1)
+        # Handle add with 'item' key (fallback and LLM)
+        if mod.get('action') == 'add' and mod.get('item'):
+            norm['action'] = 'add'
+            norm['new_item'] = mod.get('item')
+            norm['new_qty'] = int(mod.get('quantity', 1))
             return norm
-        # Handle standard add
-        if mod.get('action') == 'add' or (mod.get('item') and mod.get('quantity')):
-            norm["action"] = "add"
-            norm["new_item"] = mod.get("item")
-            norm["new_qty"] = mod.get("quantity", 1)
+
+        # Handle remove with 'item' key (fallback and LLM)
+        if mod.get('action') == 'remove' and mod.get('item'):
+            norm['action'] = 'remove'
+            norm['old_item'] = mod.get('item')
+            norm['old_qty'] = int(mod.get('quantity', 1))
             return norm
         # Handle standard remove (LLM: {"old_item": ..., "quantity": ...})
         if mod.get('old_item') and mod.get('quantity') and not mod.get('new_item') and not mod.get('item'):
@@ -549,7 +571,10 @@ Exemples :
             norm["old_qty"] = mod.get("quantity", 1)
             return norm
         # 8. old_item/new_item (handle 'replace' with quantity)
-        if "old_item" in mod and ("new_item" in mod or "item" in mod):
+        if (
+            mod.get("old_item") is not None and (mod.get("new_item") is not None or mod.get("item") is not None)
+            and mod.get("old_item") != None and (mod.get("new_item") != None or mod.get("item") != None)
+        ):
             norm["action"] = "replace"
             norm["old_item"] = mod["old_item"]
             norm["new_item"] = mod.get("new_item") or mod.get("item")
@@ -843,6 +868,7 @@ Ne mets aucun texte avant ou après le JSON.
         cleaned_input = ' '.join(user_input.splitlines()).strip()
         cleaned_input_lower = cleaned_input.lower()
         items_in_order = [item.lower() for item in order_items]
+        # Remove logic for treating add as remove
         if any(word in cleaned_input_lower for word in ["supprimer", "enlever", "retirer"]):
             for item in items_in_order:
                 if item in cleaned_input_lower:
@@ -868,23 +894,39 @@ Ne mets aucun texte avant ou après le JSON.
                         'old_item': old_item,
                         'new_item': new_item
                     }
-        if any(word in cleaned_input_lower for word in ["ajouter", "ajoutez", "ajoute"]):
-            match = re.search(r'(\d+)\s*(.*?)', cleaned_input_lower)
-            if match:
-                quantity = int(match.group(1))
-                item = match.group(2).strip()
-                return {
-                    'action': 'add',
-                    'item': item,
-                    'quantity': quantity
-                }
-            else:
-                addition = cleaned_input_lower.replace("ajouter", "").replace("ajoutez", "").replace("ajoute", "").strip()
-                return {
-                    'action': 'add',
-                    'item': addition,
-                    'quantity': 1
-                }
+        # Add logic: only allow adding more of existing items
+        if any(word in cleaned_input_lower for word in ["ajouter", "ajoutez", "ajoute", "add"]):
+            for item in items_in_order:
+                # Look for patterns like 'add 3 chairs' or 'ajouter 3 chaises'
+                # Try both English and French orderings
+                # e.g. 'add 3 chairs', 'ajouter 3 chaises', 'add chairs', 'ajouter chaises'
+                # Try to extract quantity
+                # Look for number before or after the item
+                match = re.search(r'(\d+)\s*' + re.escape(item), cleaned_input_lower)
+                if match:
+                    quantity = int(match.group(1))
+                    return {
+                        'action': 'add',
+                        'item': item,
+                        'quantity': quantity
+                    }
+                match = re.search(re.escape(item) + r'\s*(?:de)?\s*(\d+)', cleaned_input_lower)
+                if match:
+                    quantity = int(match.group(1))
+                    return {
+                        'action': 'add',
+                        'item': item,
+                        'quantity': quantity
+                    }
+                # If just 'add chairs' or 'ajouter chaises'
+                if item in cleaned_input_lower:
+                    return {
+                        'action': 'add',
+                        'item': item,
+                        'quantity': 1
+                    }
+            # If no existing item found, do not allow adding new items
+            return None
         return None
 
     def _find_closest_item(self, name, items):
@@ -915,6 +957,11 @@ Ne mets aucun texte avant ou après le JSON.
         return "Je n'ai pas compris la modification demandée. Pouvez-vous reformuler ?"
 
     def _process_modification(self, order_context: str, user_input: str, conversation=None) -> Tuple[str, ConversationState]:
+        if modification['action'] == 'cancel':
+            self.db.update_order(order_id, {'status': 'cancelled'})
+            conversation.modification_request = None
+            conversation.current_step = "completed"
+            return ("Votre commande a été annulée. Merci et à bientôt.", conversation)
         order_id = order_context.split('Commande ID: ')[1].split('\n')[0]
         if conversation is None:
             conversation_data = self.db.get_conversation(order_id)

@@ -34,19 +34,19 @@ Below are manual test scenarios to validate the agent's behavior for various use
 - **Step 3:** User: `oui`
 - **Expected:** Agent confirms in French.
 
-## 5. Add Item (English)
+## 5. Add Existing Item (English)
 
-- **Step 1:** Start a new order with 2x Table.
-- **Step 2:** User: `Add 3 chairs`
-- **Expected:** Agent adds 3 chairs, updates summary in English, asks for confirmation.
+- **Step 1:** Start a new order with 2x Table,1x Chair.
+- **Step 2:** User: `Add 3 more chairs`
+- **Expected:** Agent increases the quantity of chairs, updates summary in English, asks for confirmation.
 - **Step 3:** User: `yes`
 - **Expected:** Agent confirms in English.
 
-## 6. Add Item (French)
+## 6. Add Existing Item (French)
 
-- **Step 1:** Start a new order with 2x Table.
-- **Step 2:** User: `Ajouter 3 chaises`
-- **Expected:** Agent adds 3 chaises, updates summary in French, asks for confirmation.
+- **Step 1:** Start a new order with 2x Table, 1x Chaise.
+- **Step 2:** User: `Ajouter 3 chaises de plus`
+- **Expected:** Agent increases the quantity of chaises, updates summary in French, asks for confirmation.
 - **Step 3:** User: `oui`
 - **Expected:** Agent confirms in French.
 
