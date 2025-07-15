@@ -200,8 +200,8 @@ class OrderConfirmationAgent:
         detected_language = detect_language(user_input)
         order_context = self._format_order_context(order, language=detected_language)
         conversation_history = self._format_conversation_history(conversation.messages)
-        # Add language instruction and dynamic prompt/examples
         language = detected_language
+        # Add explicit clarification examples for ambiguous/help requests
         if language.startswith("en"):
             language_instruction = (
                 "Always reply in English, matching the user's message language. "
@@ -219,6 +219,8 @@ class OrderConfirmationAgent:
                 "{\"message\": \"...\", 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity': 2, } }\n"
                 "POSITIVE EXAMPLES (DO THIS):\n"
                 "{\"message\": \"...\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Table\", \"new_item\": \"Chair\", \"quantity\": 2, \"item\": null} }\n"
+                "If the user's request is ambiguous or a help request (e.g., 'Can you help?', 'I need help', 'What can you do?'), reply with:\n"
+                "{\"message\": \"Could you please clarify what you would like to do with your order?\", \"action\": \"none\", \"modification\": null}\n"
             )
             prompt = f"""
 {language_instruction}
@@ -270,106 +272,92 @@ Examples:
   "action": "none",
   "modification": null
 }}
+- If the client's request is ambiguous or a help request (e.g., "Can you help?", "I need help", "What can you do?"), reply with:
+{{
+  "message": "Could you please clarify what you would like to do with your order?",
+  "action": "none",
+  "modification": null
+}}
 """
         else:
+            # French prompt with explicit clarification example
             language_instruction = (
-                "Réponds toujours en français, en accord avec la langue du message de l'utilisateur. "
-                "L'utilisateur peut passer du français à l'anglais (ou à d'autres langues) à tout moment. "
+                "Réponds toujours en français, en fonction de la langue du client. "
+                "Le client peut passer du français à l'anglais (ou à une autre langue) à tout moment. "
                 f"Langue détectée pour ce message : {language}.\n"
                 "RÈGLES STRICTES JSON : Utilise UNIQUEMENT ces clés : message, action, modification, old_item, new_item, item, quantity.\n"
-                "NE JAMAIS inventer de nouvelles clés (ex: quantity_new, old_quantity, etc).\n"
-                "TOUJOURS utiliser des guillemets doubles pour tous les noms de propriété et valeurs de chaîne.\n"
-                "NE JAMAIS utiliser de guillemets simples. NE JAMAIS ajouter de virgule finale.\n"
-                "Si un champ n'est pas utile, mets-le à null.\n"
+                "N'invente JAMAIS de nouvelles clés (ex : quantity_new, old_quantity, etc).\n"
+                "Utilise TOUJOURS des guillemets doubles pour les noms de propriétés et les valeurs de chaîne.\n"
+                "N'utilise JAMAIS de guillemets simples. N'ajoute JAMAIS de virgule finale.\n"
+                "Si un champ n'est pas nécessaire, mets-le à null.\n"
                 "Si tu n'es pas sûr, demande une clarification.\n"
-                "Si tu ne peux pas comprendre l'intention de l'utilisateur, réponds avec action: 'none'.\n"
-                "\n"
+                "Si tu ne peux pas comprendre l'intention du client, réponds avec action : 'none'.\n"
                 "EXEMPLES NÉGATIFS (À NE PAS FAIRE) :\n"
-                "{ 'message': '...', 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity_new': 2 } }\n"
-                "{\"message\": \"...\", 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chair', 'quantity': 2, } }\n"
-                "\n"
+                "{ 'message': '...', 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chaise', 'quantity_new': 2 } }\n"
+                "{\"message\": \"...\", 'action': 'replace', 'modification': { 'old_item': 'Table', 'new_item': 'Chaise', 'quantity': 2, } }\n"
                 "EXEMPLES POSITIFS (À FAIRE) :\n"
-                "{\"message\": \"...\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Table\", \"new_item\": \"Chair\", \"quantity\": 2, \"item\": null} }\n"
-                "\n"
-                "CAS D'USAGE SUPPLÉMENTAIRES :\n"
-                "- Ajouter 3 pizzas : {\"message\": \"3 pizzas ont été ajoutées à votre commande.\", \"action\": \"add\", \"modification\": {\"item\": \"Pizza\", \"quantity\": 3, \"old_item\": null, \"new_item\": null}}\n"
-                "- Retirer 2 salades : {\"message\": \"2 salades ont été retirées de votre commande.\", \"action\": \"remove\", \"modification\": {\"item\": \"Salade\", \"quantity\": 2, \"old_item\": null, \"new_item\": null}}\n"
-                "- Modifier la quantité de burger de 2 à 5 : {\"message\": \"La quantité de burgers est maintenant 5.\", \"action\": \"modify\", \"modification\": {\"item\": \"Burger\", \"quantity\": 5, \"old_item\": null, \"new_item\": null}}\n"
-                "- Remplacer 2 lasagnes par 3 pizzas : {\"message\": \"2 lasagnes ont été remplacées par 3 pizzas.\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Lasagne\", \"old_quantity\": 2, \"new_item\": \"Pizza\", \"new_quantity\": 3, \"item\": null}}\n"
-                "- Annuler la commande : {\"message\": \"Votre commande a été annulée.\", \"action\": \"cancel\", \"modification\": null}\n"
-                "- Demander une clarification : {\"message\": \"Pouvez-vous préciser votre demande ?\", \"action\": \"none\", \"modification\": null}\n"
-                "\n"
-                "Pour chaque action, explique clairement ce qui a été fait et demande une confirmation si nécessaire.\n"
+                "{\"message\": \"...\", \"action\": \"replace\", \"modification\": {\"old_item\": \"Table\", \"new_item\": \"Chaise\", \"quantity\": 2, \"item\": null} }\n"
+                "Si la demande du client est ambiguë ou une demande d'aide (ex : 'Pouvez-vous m'aider ?', 'J'ai besoin d'aide', 'Que pouvez-vous faire ?'), réponds :\n"
+                "{\"message\": \"Pouvez-vous préciser ce que vous souhaitez faire avec votre commande ?\", \"action\": \"none\", \"modification\": null}\n"
             )
             prompt = f"""
 {language_instruction}
 
-Tu es un agent de confirmation de commande professionnel et sympathique. Voici le contexte de la commande :
+Vous êtes un agent professionnel et sympathique de confirmation de commande. Voici le contexte de la commande :
 {order_context}
 
-Historique de la conversation :
+Historique de conversation :
 {conversation_history}
 
 Le client a dit : \"{user_input}\"
 
-Réponds avec un JSON strictement de la forme :
+Réponds strictement avec un JSON au format suivant :
 {{
   "message": "...",  // Ce que l'agent doit dire au client
   "action": "confirm|modify|cancel|add|remove|replace|none",  // L'action à effectuer (utilise 'none' si aucune action n'est requise)
   "modification": {{ "old_item": "...", "new_item": "...", "item": "...", "quantity": ... }} // si applicable, sinon null
 }}
-Ne mets aucun texte avant ou après le JSON.
+N'ajoute aucun texte avant ou après le JSON.
 
 Exemples :
-- Si le client dit "Non, c'est tout" ou "Oui", réponds avec l'action de confirmation et un message de clôture final:
+- Si le client dit "Oui" ou "Correct", réponds avec l'action confirm et un message de clôture :
 {{
-  "message": "Merci, votre commande est confirmée. Nous la préparons maintenant.",
+  "message": "Parfait, votre commande est confirmée ! Nous la préparons dès maintenant.",
   "action": "confirm",
   "modification": null
 }}
-- Si le client veut ajouter un article, utilise l'action d'ajout:
+- Si le client veut ajouter un article, utilise l'action add :
 {{
-  "message": "J'ai ajouté 2 vélos supplémentaires à votre commande. Le total a été mis à jour. Est-ce qu'il y a autre chose?",
+  "message": "J'ai ajouté 2 motos supplémentaires à votre commande. Le total a été mis à jour. Souhaitez-vous autre chose ?",
   "action": "add",
-  "modification": {{ "item": "Bicycle", "quantity": 2, "old_item": null, "new_item": null }}
+  "modification": {{ "item": "Moto", "quantity": 2, "old_item": null, "new_item": null }}
 }}
-- Si le client veut modifier la quantité d'un article, utilise l'action de modification:
+- Si le client veut modifier la quantité d'un article, utilise l'action modify :
 {{
-  "message": "Le nombre total de vélos dans votre commande est maintenant 2. Est-ce que tout est en ordre?",
+  "message": "Le nombre total de vélos dans votre commande est maintenant de 2. Cela vous convient-il ?",
   "action": "modify",
-  "modification": {{ "item": "Bicycle", "quantity": 2, "old_item": null, "new_item": null }}
+  "modification": {{ "item": "Vélo", "quantity": 2, "old_item": null, "new_item": null }}
 }}
-- Si le client veut remplacer un article, utilise l'action de remplacement avec old_item et new_item:
+- Si le client veut remplacer un article, utilise l'action replace avec old_item et new_item :
 {{
-  "message": "Lasagna a été remplacé par Pizza dans votre commande. Y a-t-il autre chose?",
+  "message": "La lasagne a été remplacée par une pizza dans votre commande. Autre chose ?",
   "action": "replace",
-  "modification": {{ "old_item": "Lasagna", "new_item": "Pizza", "item": null, "quantity": null }}
+  "modification": {{ "old_item": "Lasagne", "new_item": "Pizza", "item": null, "quantity": null }}
 }}
-- Si le client dit "Merci", réponds avec l'action 'none':
+- Si le client dit "Merci", réponds avec l'action none :
 {{
-  "message": "Merci à vous ! N'hésitez pas à nous recontacter si besoin.",
+  "message": "Avec plaisir ! N'hésitez pas à nous contacter si besoin.",
   "action": "none",
   "modification": null
 }}
-- Si le client demande d'annuler la commande:
+- Si la demande du client est ambiguë ou une demande d'aide (ex : "Pouvez-vous m'aider ?", "J'ai besoin d'aide", "Que pouvez-vous faire ?"), réponds :
 {{
-  "message": "Votre commande a été annulée.",
-  "action": "cancel",
-  "modification": null
-}}
-- Si la demande n'est pas claire:
-{{
-  "message": "Pouvez-vous préciser votre demande ?",
+  "message": "Pouvez-vous préciser ce que vous souhaitez faire avec votre commande ?",
   "action": "none",
   "modification": null
-}}
-- Si le client veut retirer un article sans le remplacer:
-{{
-  "message": "J'ai retiré 1 article de votre commande. Est-ce correct ?",
-  "action": "remove",
-  "modification": {{ "old_item": "Nom de l'article", "old_qty": 1, "new_item": null, "new_qty": null }}
 }}
 """
+        # End of prompt construction
         try:
             llm_raw = call_llm(prompt, max_tokens=256)
             print("[LLM RAW]", llm_raw)
@@ -478,17 +466,22 @@ Exemples :
             raise
 
     def _normalize_modification(self, modification):
-        # Handle cancel action
-        if mod.get('action') == 'cancel':
-            norm['action'] = 'cancel'
+        mod = modification if isinstance(modification, dict) else {}
+        # Special case: treat 'modify' with same item as quantity update, not replace
+        if mod.get('action') == 'modify' and mod.get('item') and (
+            mod.get('old_item') is None or mod.get('old_item') == mod.get('item')):
+            norm = {"action": "modify", "old_item": mod.get('item'), "new_item": mod.get('item'), "old_qty": None, "new_qty": int(mod.get('quantity', 1))}
             return norm
         """
         Normalize any LLM modification dict to a canonical format:
         {"action": ..., "old_item": ..., "new_item": ..., "old_qty": ..., "new_qty": ...}
         For 'replace' with a 'quantity' field, always treat as: remove old_item (1 or specified), add new_item with the specified quantity.
         """
-        mod = modification
         norm = {"action": None, "old_item": None, "new_item": None, "old_qty": 1, "new_qty": 1}
+        # Handle cancel action
+        if mod.get('action') == 'cancel':
+            norm['action'] = 'cancel'
+            return norm
         # Handle add with 'item' key (fallback and LLM)
         if mod.get('action') == 'add' and mod.get('item'):
             norm['action'] = 'add'
