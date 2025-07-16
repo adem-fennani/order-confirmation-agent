@@ -154,8 +154,10 @@ class OrderConfirmationAgent:
             print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
             return self.process_message_basic(order_id, user_input)
         except Exception as e:
-            print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
-            return self.process_message_basic(order_id, user_input)
+            print("[LLM EXCEPTION]", e)  # Debug: print exception details
+            print(f"[LLM PARSE ERROR] {e}")
+            # User-friendly error message
+            return "Sorry, I had trouble understanding your last message. Could you please rephrase or clarify? If the problem persists, a human agent will assist you."
 
     def llm_process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
         """
@@ -368,7 +370,7 @@ Exemples :
                 # Replace single quotes with double quotes
                 s = re.sub(r"'", '"', s)
                 # Remove trailing commas before closing braces/brackets
-                s = re.sub(r',([ \t\r\n]*[}}\]])', r'\1', s)
+                s = re.sub(r',([ \t\r\n]*[}\]])', r'\1', s)
                 # Remove non-breaking spaces and invisible characters
                 s = s.replace('\u00A0', ' ')
                 # Remove unquoted property names (rare)
@@ -950,11 +952,6 @@ Ne mets aucun texte avant ou après le JSON.
         return "Je n'ai pas compris la modification demandée. Pouvez-vous reformuler ?"
 
     def _process_modification(self, order_context: str, user_input: str, conversation=None) -> Tuple[str, ConversationState]:
-        if modification['action'] == 'cancel':
-            self.db.update_order(order_id, {'status': 'cancelled'})
-            conversation.modification_request = None
-            conversation.current_step = "completed"
-            return ("Votre commande a été annulée. Merci et à bientôt.", conversation)
         order_id = order_context.split('Commande ID: ')[1].split('\n')[0]
         if conversation is None:
             conversation_data = self.db.get_conversation(order_id)
@@ -967,6 +964,11 @@ Ne mets aucun texte avant ou après le JSON.
         modification = conversation.modification_request
         if modification is None:
             return ("Je ne trouve pas la demande de modification. Pouvez-vous répéter ?", conversation)
+        if modification['action'] == 'cancel':
+            self.db.update_order(order_id, {'status': 'cancelled'})
+            conversation.modification_request = None
+            conversation.current_step = "completed"
+            return ("Votre commande a été annulée. Merci et à bientôt.", conversation)
         user_input_lower = user_input.lower()
         if any(word in user_input_lower for word in ["non", "incorrect", "erreur"]):
             conversation.modification_request = None
