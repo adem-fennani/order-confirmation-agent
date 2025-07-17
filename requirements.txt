@@ -6,4 +6,5 @@ pydantic>=2.0
 python-multipart==0.0.6 
 langdetect 
 httpx
-aiosqlite 
+aiosqlite
+google-generativeai 
