@@ -3,9 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from src.api.routes import router
+from src.api.dependencies import create_db_tables
 import os
 
 app = FastAPI(title="Order Confirmation Agent API", version="1.0.0")
+
+@app.on_event("startup")
+async def startup_event():
+    await create_db_tables()
 
 # Serve static files from the 'src/web' directory at /static
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "web"), html=True), name="static")

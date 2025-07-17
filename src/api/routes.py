@@ -8,14 +8,16 @@ import uuid
 from datetime import datetime
 import json
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import select
 
 router = APIRouter()
 
 @router.get("/orders")
 async def get_orders(db=Depends(get_db)):
     orders = []
-    with db.Session() as session:
-        db_orders = session.query(OrderModel).all()
+    async with db.Session() as session:
+        result = await session.execute(select(OrderModel))
+        db_orders = result.scalars().all()
         for order in db_orders:
             items = order.items
             if isinstance(items, str):
@@ -38,8 +40,9 @@ async def get_orders(db=Depends(get_db)):
 
 @router.get("/orders/{order_id}")
 async def get_order(order_id: str, db=Depends(get_db)):
-    with db.Session() as session:
-        order = session.query(OrderModel).filter_by(id=order_id).first()
+    async with db.Session() as session:
+        result = await session.execute(select(OrderModel).filter_by(id=order_id))
+        order = result.scalars().first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         items = order.items
@@ -64,8 +67,7 @@ async def get_order(order_id: str, db=Depends(get_db)):
 
 @router.post("/orders/{order_id}/confirm")
 async def start_confirmation(order_id: str, db=Depends(get_db), agent=Depends(get_agent)):
-    # No need to fetch order_data here, just pass language (default 'fr')
-    initial_response = agent.start_conversation(order_id, language="fr")
+    initial_response = await agent.start_conversation(order_id, language="fr")
     return {
         "order_id": order_id,
         "message": initial_response,
@@ -82,7 +84,7 @@ async def send_message(order_id: str, message: dict, agent=Depends(get_agent)):
         language = detect(user_input)
     except Exception:
         language = "fr"  # Default to French if detection fails
-    response = agent.process_message(order_id, user_input, language=language)
+    response = await agent.process_message(order_id, user_input, language=language)
     return {
         "order_id": order_id,
         "user_message": user_input,
@@ -91,7 +93,7 @@ async def send_message(order_id: str, message: dict, agent=Depends(get_agent)):
 
 @router.get("/orders/{order_id}/conversation")
 async def get_conversation(order_id: str, db=Depends(get_db)):
-    conversation = db.get_conversation(order_id)
+    conversation = await db.get_conversation(order_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"conversation": conversation}
@@ -100,7 +102,7 @@ async def get_conversation(order_id: str, db=Depends(get_db)):
 async def create_order(order: CreateOrder, db=Depends(get_db)):
     order_id = f"order_{str(uuid.uuid4())[:8]}"
     now = datetime.utcnow()
-    with db.Session() as session:
+    async with db.Session() as session:
         new_order = OrderModel(
             id=order_id,
             customer_name=order.customer_name,
@@ -113,24 +115,26 @@ async def create_order(order: CreateOrder, db=Depends(get_db)):
             notes=order.notes
         )
         session.add(new_order)
-        session.commit()
+        await session.commit()
     return {"id": order_id, "status": "created"}
 
 @router.delete("/orders/{order_id}")
 async def delete_order(order_id: str, db=Depends(get_db)):
-    with db.Session() as session:
-        order = session.query(OrderModel).filter_by(id=order_id).first()
+    async with db.Session() as session:
+        result = await session.execute(select(OrderModel).filter_by(id=order_id))
+        order = result.scalars().first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        session.delete(order)
-        session.commit()
-    db.delete_conversation(order_id) if hasattr(db, 'delete_conversation') else None
+        await session.delete(order)
+        await session.commit()
+    await db.delete_conversation(order_id)
     return {"id": order_id, "status": "deleted"}
 
 @router.put("/orders/{order_id}")
 async def update_order(order_id: str, order: dict = Body(...), db=Depends(get_db)):
-    with db.Session() as session:
-        db_order = session.query(OrderModel).filter_by(id=order_id).first()
+    async with db.Session() as session:
+        result = await session.execute(select(OrderModel).filter_by(id=order_id))
+        db_order = result.scalars().first()
         if not db_order:
             raise HTTPException(status_code=404, detail="Order not found")
         db_order.customer_name = order.get("customer_name", db_order.customer_name)
@@ -139,13 +143,13 @@ async def update_order(order_id: str, order: dict = Body(...), db=Depends(get_db
         db_order.total_amount = order.get("total_amount", db_order.total_amount)
         db_order.status = order.get("status", db_order.status)
         db_order.notes = order.get("notes", db_order.notes)
-        session.commit()
+        await session.commit()
     return {"id": order_id, "status": "updated"}
 
 @router.post("/orders/{order_id}/reset")
 async def reset_conversation(order_id: str, db=Depends(get_db), agent=Depends(get_agent)):
     try:
-        result = agent.reset_conversation(order_id)
+        result = await agent.reset_conversation(order_id)
         return jsonable_encoder(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la réinitialisation: {str(e)}") 

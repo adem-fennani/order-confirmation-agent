@@ -2,27 +2,32 @@
 from typing import Dict, Optional, Any
 from datetime import datetime
 import json
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from .models import Base, OrderModel, ConversationModel
 from .base import DatabaseInterface
+from sqlalchemy import select, delete
 
 class SQLiteDatabase(DatabaseInterface):
-    def __init__(self, db_url="sqlite:///orders.db"):
-        self.engine = create_engine(db_url)
-        Base.metadata.create_all(self.engine)
-        self.Session = sessionmaker(bind=self.engine)
-    
-    def create_order(self, order_data: Dict) -> None:
-        with self.Session() as session:
+    def __init__(self, db_url="sqlite+aiosqlite:///orders.db"):
+        self.engine = create_async_engine(db_url)
+        self.Session = sessionmaker(
+            bind=self.engine,
+            class_=AsyncSession,
+            expire_on_commit=False
+        )
+
+    async def create_order(self, order_data: Dict) -> None:
+        async with self.Session() as session:
             order_data['created_at'] = datetime.fromisoformat(order_data['created_at'])
             order = OrderModel(**order_data)
             session.add(order)
-            session.commit()
-    
-    def get_order(self, order_id: str) -> Optional[Dict]:
-        with self.Session() as session:
-            order = session.query(OrderModel).filter_by(id=order_id).first()
+            await session.commit()
+
+    async def get_order(self, order_id: str) -> Optional[Dict]:
+        async with self.Session() as session:
+            result = await session.execute(select(OrderModel).filter_by(id=order_id))
+            order = result.scalars().first()
             if order:
                 items = order.items
                 if isinstance(items, str):
@@ -42,23 +47,25 @@ class SQLiteDatabase(DatabaseInterface):
                     "notes": order.notes
                 }
         return None
-    
-    def update_order(self, order_id: str, updates: Dict[str, Any]) -> bool:
-        with self.Session() as session:
-            order = session.query(OrderModel).filter_by(id=order_id).first()
+
+    async def update_order(self, order_id: str, updates: Dict[str, Any]) -> bool:
+        async with self.Session() as session:
+            result = await session.execute(select(OrderModel).filter_by(id=order_id))
+            order = result.scalars().first()
             if order:
                 for key, value in updates.items():
                     if key == "confirmed_at" and isinstance(value, str):
                         setattr(order, key, datetime.fromisoformat(value))
                     else:
                         setattr(order, key, value)
-                session.commit()
+                await session.commit()
                 return True
         return False
-    
-    def get_conversation(self, order_id: str) -> Optional[Dict]:
-        with self.Session() as session:
-            conv = session.query(ConversationModel).filter_by(order_id=order_id).first()
+
+    async def get_conversation(self, order_id: str) -> Optional[Dict]:
+        async with self.Session() as session:
+            result = await session.execute(select(ConversationModel).filter_by(order_id=order_id))
+            conv = result.scalars().first()
             if conv:
                 return {
                     "order_id": conv.order_id,
@@ -68,10 +75,11 @@ class SQLiteDatabase(DatabaseInterface):
                     "issues_found": json.loads(conv.issues_found)
                 }
         return None
-    
-    def update_conversation(self, order_id: str, conversation: Dict) -> bool:
-        with self.Session() as session:
-            conv = session.query(ConversationModel).filter_by(order_id=order_id).first()
+
+    async def update_conversation(self, order_id: str, conversation: Dict) -> bool:
+        async with self.Session() as session:
+            result = await session.execute(select(ConversationModel).filter_by(order_id=order_id))
+            conv = result.scalars().first()
             if conv:
                 # Update existing
                 conv.messages = json.dumps(conversation["messages"])
@@ -88,15 +96,12 @@ class SQLiteDatabase(DatabaseInterface):
                     issues_found=json.dumps(conversation.get("issues_found", []))
                 )
                 session.add(new_conv)
-            session.commit()
+            await session.commit()
             return True
 
-    def delete_conversation(self, order_id: str) -> bool:
+    async def delete_conversation(self, order_id: str) -> bool:
         """Delete conversation for an order"""
-        with self.Session() as session:
-            conv = session.query(ConversationModel).filter_by(order_id=order_id).first()
-            if conv:
-                session.delete(conv)
-                session.commit()
-                return True
-        return False
+        async with self.Session() as session:
+            await session.execute(delete(ConversationModel).filter_by(order_id=order_id))
+            await session.commit()
+            return True

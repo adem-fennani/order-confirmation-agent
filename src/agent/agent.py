@@ -12,48 +12,11 @@ from fastapi.encoders import jsonable_encoder
 class OrderConfirmationAgent:
     def __init__(self, db: SQLiteDatabase): 
         self.db = db
-        self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", self._get_dynamic_system_prompt()),
-            ("human", "{user_input}")
-        ])
-    
-    def _get_dynamic_system_prompt(self) -> str:
-        hour = datetime.now().hour
-        greeting = "Bonne journée" if 6 <= hour < 18 else "Bonsoir"
-        time_based_tone = ""
-        if 6 <= hour < 9:
-            time_based_tone = "Sois concis et direct, les clients sont probablement pressés le matin."
-        elif 9 <= hour < 12:
-            time_based_tone = "Sois professionnel mais amical."
-        elif 12 <= hour < 14:
-            time_based_tone = "Sois efficace, c'est l'heure du déjeuner."
-        elif 14 <= hour < 18:
-            time_based_tone = "Sois plus détendu et conversationnel."
-        else:
-            time_based_tone = "Sois courtois et concis, c'est le soir."
-        return f"""Tu es un agent de confirmation de commande professionnel et sympathique. {greeting}!
-        Ton rôle est de confirmer les détails d'une commande avec le client.
-        
-        Règles importantes:
-        - {time_based_tone}
-        - Adapte ton ton à l'humeur du client
-        - Reformule clairement les détails de la commande
-        - Pose des questions de clarification si nécessaire
-        - Confirme chaque élément un par un si la commande est complexe
-        - Demande confirmation finale avant de valider
-        - Si le client veut modifier quelque chose, note-le clairement
-        
-        Contexte de la commande:
-        {{order_context}}
-        
-        Étape actuelle: {{current_step}}
-        Historique de conversation: {{conversation_history}}
-        """
-    
-    def process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
+
+    async def process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
         try:
             # --- Heuristic parsing for user corrections ---
-            conversation_data = self.db.get_conversation(order_id)
+            conversation_data = await self.db.get_conversation(order_id)
             conversation = ConversationState(**conversation_data) if conversation_data else None
             user_input_lower = user_input.strip().lower()
             user_confirms = any(word in user_input_lower for word in ["yes", "oui", "ok", "correct", "d'accord"])
@@ -83,7 +46,7 @@ class OrderConfirmationAgent:
             if only_want_match:
                 qty = only_want_match.group(2)
                 item = only_want_match.group(3).strip()
-                order_data = self.db.get_order(order_id)
+                order_data = await self.db.get_order(order_id)
                 if order_data:
                     order = Order(**order_data)
                     # Remove all items except the specified one
@@ -97,7 +60,7 @@ class OrderConfirmationAgent:
                                 o_item.quantity = int(qty)
                     # Remove items with quantity 0
                     order.items = [i for i in order.items if i.quantity > 0]
-                    self.db.update_order(order_id, {
+                    await self.db.update_order(order_id, {
                         'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
                         'total_amount': sum(item.price * item.quantity for item in order.items)
                     })
@@ -111,7 +74,7 @@ class OrderConfirmationAgent:
                         confirmation_message = f"Votre commande contient maintenant : {items_str}. Le total est de {total}€. Est-ce correct ?"
                     if conversation:
                         conversation.messages.append({"role": "assistant", "content": confirmation_message})
-                        self.db.update_conversation(order_id, conversation.dict())
+                        await self.db.update_conversation(order_id, conversation.dict())
                     return confirmation_message
             if awaiting_confirmation and user_confirms:
                 # --- Infer language for final confirmation ---
@@ -120,7 +83,7 @@ class OrderConfirmationAgent:
                     final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
                 else:
                     final_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
-                self.db.update_order(
+                await self.db.update_order(
                     order_id,
                     {
                         "status": "confirmed",
@@ -130,17 +93,17 @@ class OrderConfirmationAgent:
                 if conversation:
                     conversation.messages.append({"role": "assistant", "content": final_message})
                     conversation.current_step = "completed"
-                    self.db.update_conversation(order_id, conversation.dict())
+                    await self.db.update_conversation(order_id, conversation.dict())
                 else:
                     conversation = ConversationState(
                         order_id=order_id,
                         messages=[{"role": "assistant", "content": final_message}],
                         current_step="completed"
                     )
-                    self.db.update_conversation(order_id, conversation.dict())
+                    await self.db.update_conversation(order_id, conversation.dict())
                 return final_message
             # --- End message-history-based confirmation logic ---
-            llm_response = self.llm_process_message(order_id, user_input, language=language)
+            llm_response = await self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
                 return llm_response
             else:
@@ -152,25 +115,25 @@ class OrderConfirmationAgent:
                 else:
                     return "Notre assistant est temporairement indisponible (quota dépassé). Merci de réessayer plus tard ou de contacter le support."
             print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
-            return self.process_message_basic(order_id, user_input)
+            return await self.process_message_basic(order_id, user_input)
         except Exception as e:
             print("[LLM EXCEPTION]", e)  # Debug: print exception details
             print(f"[LLM PARSE ERROR] {e}")
             # User-friendly error message
             return "Sorry, I had trouble understanding your last message. Could you please rephrase or clarify? If the problem persists, a human agent will assist you."
 
-    def llm_process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
+    async def llm_process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
         """
         New LLM-centric conversation logic. Handles all steps: greeting, confirmation, modification, etc.
         Returns the agent's response as a string. Raises on LLM or parsing failure.
         """
-        order_data = self.db.get_order(order_id)
+        order_data = await self.db.get_order(order_id)
         if not order_data:
             return "Désolé, je ne trouve pas cette commande. Pouvez-vous vérifier le numéro de commande?"
         order = Order(**order_data)
         if order.status == "confirmed":
             return "Votre commande a déjà été confirmée. Merci!"
-        conversation_data = self.db.get_conversation(order_id)
+        conversation_data = await self.db.get_conversation(order_id)
         if not conversation_data:
             conversation = ConversationState(
                 order_id=order_id,
@@ -361,7 +324,7 @@ Exemples :
 """
         # End of prompt construction
         try:
-            llm_raw = call_llm(prompt, max_tokens=256)
+            llm_raw = await call_llm(prompt, max_tokens=256)
             print("[LLM RAW]", llm_raw)
             json_str = llm_raw.strip()
             # Robust JSON repair/validation
@@ -410,7 +373,7 @@ Exemples :
                 else:
                     final_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
                 
-                self.db.update_order(
+                await self.db.update_order(
                     order_id,
                     {
                         "status": "confirmed",
@@ -420,10 +383,10 @@ Exemples :
                 # Move conversation to final state after confirmation
                 conversation.messages.append({"role": "assistant", "content": final_message})
                 conversation.current_step = "completed"
-                self.db.update_conversation(order_id, conversation.dict())
+                await self.db.update_conversation(order_id, conversation.dict())
                 return final_message
             elif data.get("action") == "cancel":
-                self.db.update_order(
+                await self.db.update_order(
                     order_id,
                     {
                         "status": "cancelled",
@@ -433,14 +396,14 @@ Exemples :
             # Handle action if needed (e.g., apply modification)
             # Only apply modification if not already pending
             if data.get("action") in {"modify", "replace", "remove", "add"} and data.get("modification"):
-                applied_successfully = self._apply_llm_modification(order_id, order, data["modification"], data["action"], conversation, user_input)
+                applied_successfully = await self._apply_llm_modification(order_id, order, data["modification"], data["action"], conversation, user_input)
                 if not applied_successfully:
                     if language.startswith("en"):
                         data["message"] = "I'm sorry, I didn't understand that. Could you please clarify your request?"
                     else:
                         data["message"] = "Je suis désolé, je n'ai pas compris. Pouvez-vous clarifier votre demande ?"
                 else:
-                    updated_order_data = self.db.get_order(order_id)
+                    updated_order_data = await self.db.get_order(order_id)
                     if isinstance(updated_order_data, str) and updated_order_data is not None:
                         try:
                             updated_order_data = json.loads(updated_order_data)
@@ -461,7 +424,7 @@ Exemples :
                 pass # This line is removed as conversation is passed as an argument
             # Save conversation state
             conversation.messages.append({"role": "assistant", "content": data["message"]})
-            self.db.update_conversation(order_id, conversation.dict())
+            await self.db.update_conversation(order_id, conversation.dict())
             return data["message"]
         except Exception as e:
             print(f"[LLM PARSE ERROR] {e}")
@@ -590,12 +553,12 @@ Exemples :
         print(f"[WARN] Could not normalize LLM modification: {mod}")
         return norm
 
-    def _apply_llm_modification(self, order_id, order, modification, action, conversation, user_input=None) -> bool:
+    async def _apply_llm_modification(self, order_id, order, modification, action, conversation, user_input=None) -> bool:
         """Apply the modification as instructed by the LLM. Uses normalized canonical format. Prevents duplicate modifications."""
         norm = self._normalize_modification(modification)
         print(f"[NORM] Normalized modification: {norm}")
         # --- Prevent duplicate modifications ---
-        # conversation_data = self.db.get_conversation(order_id) # This line is removed as conversation is passed as an argument
+        # conversation_data = await self.db.get_conversation(order_id) # This line is removed as conversation is passed as an argument
         # if conversation_data: # This line is removed as conversation is passed as an argument
         #     conversation = ConversationState(**conversation_data) # This line is removed as conversation is passed as an argument
         #     last_mod = getattr(conversation, 'last_modification', None) # This line is removed as conversation is passed as an argument
@@ -645,17 +608,17 @@ Exemples :
         if not applied:
             print(f"[WARN] Could not apply normalized modification: {norm}")
             return False
-        self.db.update_order(order_id, {
+        await self.db.update_order(order_id, {
             'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
             'total_amount': sum(item.price * item.quantity for item in order.items)
         })
         # --- Store last modification in conversation state ---
         # if conversation: # This line is removed as conversation is passed as an argument
         #     conversation.last_modification = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"]) # This line is removed as conversation is passed as an argument
-        #     self.db.update_conversation(order_id, conversation.dict()) # This line is removed as conversation is passed as an argument
+        #     await self.db.update_conversation(order_id, conversation.dict()) # This line is removed as conversation is passed as an argument
         return True
 
-    def process_message_basic(self, order_id: str, user_input: str) -> str:
+    async def process_message_basic(self, order_id: str, user_input: str) -> str:
         # The old rule-based logic, unchanged. Just call the previous process_message logic here if fallback is needed.
         # For now, call the previous implementation (copy the old process_message logic here if needed).
         # This is a placeholder for the fallback.
@@ -695,7 +658,7 @@ Status: {order.status}
             summary = f"[Résumé: Conversation commencée il y a {len(messages)} messages]\n"
         else:
             summary = ""
-        history = [f"{'Client' if msg['role'] == 'user' else 'Agent'}: {msg['content']}" 
+        history = [f"{ 'Client' if msg['role'] == 'user' else 'Agent'}: {msg['content']}" 
                   for msg in context_messages]
         return summary + "\n".join(history)
     
@@ -711,13 +674,13 @@ Status: {order.status}
                 score -= 1
         return score
 
-    def _generate_response(self, order_context: str, current_step: str, 
+    async def _generate_response(self, order_context: str, current_step: str, 
                         conversation_history: str, user_input: str, conversation=None) -> Tuple[str, ConversationState]:
         print(f"[DEBUG] _generate_response: current_step={current_step}, modification_request={getattr(conversation, 'modification_request', None) if conversation else None}")
         order_id_match = re.search(r"Commande ID: (.+)", order_context)
         order_id = order_id_match.group(1).strip() if order_id_match else ""
         if not conversation:
-            conversation_data = self.db.get_conversation(order_id)
+            conversation_data = await self.db.get_conversation(order_id)
             if not conversation_data:
                 conversation = ConversationState(
                     order_id=order_id,
@@ -742,7 +705,7 @@ Status: {order.status}
         order_items = [line.split(' x')[0].strip('- ').strip() for line in items_text.split('\n') if line.strip() and 'x' in line]
         if current_step == "greeting":
             if "modifier" in user_input_lower:
-                return (self._handle_modification_request(order_context), conversation)
+                return (await self._handle_modification_request(order_context), conversation)
             return (f"Bonjour {customer_name}! Je vous appelle pour confirmer votre commande. {order_context.split('Articles:')[1].split('Total:')[0]} pour un total de {order_context.split('Total: ')[1].split('€')[0]}€. Est-ce que ces informations sont correctes ?", conversation)
         elif current_step == "confirming_items":
             if not self._is_clear_confirmation(user_input):
@@ -758,7 +721,7 @@ Status: {order.status}
                         "- 'Je veux changer la pizza en lasagne'\n"
                         "- 'Je veux supprimer les frites'", conversation)
             else:
-                modification = self._parse_modification_request(user_input, order_context, order_items)
+                modification = await self._parse_modification_request(user_input, order_context, order_items)
                 if modification:
                     if conversation:
                         conversation.modification_request = modification
@@ -767,7 +730,7 @@ Status: {order.status}
                 return ("Je ne suis pas sûr de comprendre. Pouvez-vous me dire si les articles de votre commande sont corrects ?", conversation)
         elif current_step == "modifying_items":
             print(f"[DEBUG] _generate_response (modifying_items): modification_request={getattr(conversation, 'modification_request', None)}")
-            result, conversation = self._process_modification(order_context, user_input, conversation=conversation)
+            result, conversation = await self._process_modification(order_context, user_input, conversation=conversation)
             print(f"[DEBUG] _generate_response (after _process_modification): modification_request={getattr(conversation, 'modification_request', None)}")
             return (result, conversation)
         elif current_step == "confirming_details":
@@ -776,12 +739,12 @@ Status: {order.status}
             return ("Merci, nous récapitulons votre commande. Confirmez-vous que tout est correct avant que nous procédions à la préparation ?", conversation)
         elif current_step == "final_confirmation":
             if any(word in user_input_lower for word in ["oui", "confirme", "ok", "d'accord"]):
-                self.db.update_order(
+                await self.db.update_order(
                     order_id=order_context.split('Commande ID: ')[1].split('\n')[0],
                     updates={"status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()})
                 return ("Parfait, nous procédons à la préparation de votre commande.", conversation)
             else:
-                self.db.update_order(
+                await self.db.update_order(
                     order_id=order_context.split('Commande ID: ')[1].split('\n')[0],
                     updates={"status": "cancelled"}
                 )
@@ -794,7 +757,7 @@ Status: {order.status}
         text_lower = text.lower()
         return any(word in text_lower for word in positive + negative)
 
-    def _handle_modification_request(self, order_context: str, user_input: str = "") -> str:
+    async def _handle_modification_request(self, order_context: str, user_input: str = "") -> str:
         items_text = order_context.split('Articles:')[1].split('Total:')[0]
         # Extract item names from items_text
         order_items = [line.split(' x')[0].strip('- ').strip() for line in items_text.split('\n') if line.strip() and 'x' in line]
@@ -805,23 +768,22 @@ Status: {order.status}
                     f"{items_text}\n"
                     "Vous pouvez dire par exemple :\n"
                     "- 'Je veux changer le burger classique en burger végétarien'\n"
-                    "- 'Je veux supprimer les frites'\n"
-                    "- 'Je veux ajouter une boisson'")
-        modification = self._parse_modification_request(user_input, items_text, order_items)
+                    "- 'Je veux supprimer les frites'")
+        modification = await self._parse_modification_request(user_input, items_text, order_items)
         if not modification:
             return ("Je n'ai pas bien compris quelle modification vous souhaitez faire. "
                     "Pouvez-vous reformuler ? Par exemple:\n"
                     "- 'Je veux changer le burger classique en burger végétarien'\n"
                     "- 'Je veux supprimer les frites'")
-        conversation_data = self.db.get_conversation(order_context.split('Commande ID: ')[1].split('\n')[0])
+        conversation_data = await self.db.get_conversation(order_context.split('Commande ID: ')[1].split('\n')[0])
         if conversation_data:
             conversation = ConversationState(**conversation_data)
             conversation.modification_request = modification
             conversation.current_step = "modifying_items"
-            self.db.update_conversation(conversation.order_id, conversation.dict())
+            await self.db.update_conversation(conversation.order_id, conversation.dict())
         return self._get_modification_confirmation_prompt(modification)
 
-    def _parse_modification_request(self, user_input: str, items_text: str, order_items: list) -> Optional[Dict]:
+    async def _parse_modification_request(self, user_input: str, items_text: str, order_items: list) -> Optional[Dict]:
         items_json = json.dumps(order_items)
         prompt = f"""
 Voici la liste des articles de la commande : {items_json}
@@ -839,7 +801,7 @@ Déduis l'intention de modification. Réponds uniquement avec un JSON strictemen
 Ne mets aucun texte avant ou après le JSON.
 """
         try:
-            llm_response = call_llm(prompt, max_tokens=256)
+            llm_response = await call_llm(prompt, max_tokens=256)
             print("LLM RAW RESPONSE:", llm_response)  # For debugging
             json_str = llm_response.strip()
             json_str = json_str.replace("'", '"')
@@ -951,10 +913,10 @@ Ne mets aucun texte avant ou après le JSON.
                     "à votre commande. Est-ce correct ? (Oui/Non)")
         return "Je n'ai pas compris la modification demandée. Pouvez-vous reformuler ?"
 
-    def _process_modification(self, order_context: str, user_input: str, conversation=None) -> Tuple[str, ConversationState]:
+    async def _process_modification(self, order_context: str, user_input: str, conversation=None) -> Tuple[str, ConversationState]:
         order_id = order_context.split('Commande ID: ')[1].split('\n')[0]
         if conversation is None:
-            conversation_data = self.db.get_conversation(order_id)
+            conversation_data = await self.db.get_conversation(order_id)
             if not conversation_data or not conversation_data.get('modification_request'):
                 # Always return a ConversationState object
                 conversation = ConversationState(order_id=order_id, messages=[], current_step="confirming_items")
@@ -965,7 +927,7 @@ Ne mets aucun texte avant ou après le JSON.
         if modification is None:
             return ("Je ne trouve pas la demande de modification. Pouvez-vous répéter ?", conversation)
         if modification['action'] == 'cancel':
-            self.db.update_order(order_id, {'status': 'cancelled'})
+            await self.db.update_order(order_id, {'status': 'cancelled'})
             conversation.modification_request = None
             conversation.current_step = "completed"
             return ("Votre commande a été annulée. Merci et à bientôt.", conversation)
@@ -976,7 +938,7 @@ Ne mets aucun texte avant ou après le JSON.
             return ("D'accord, annulons cette modification. Quel article souhaitez-vous modifier ?", conversation)
         if not any(word in user_input_lower for word in ["oui", "correct", "ok", "d'accord"]):
             return ("Je ne suis pas sûr d'avoir compris. Confirmez-vous cette modification ? (Oui/Non)", conversation)
-        order_data = self.db.get_order(order_id)
+        order_data = await self.db.get_order(order_id)
         if not order_data:
             return ("Désolé, je ne trouve pas cette commande.", conversation)
         order = Order(**order_data)
@@ -1010,7 +972,7 @@ Ne mets aucun texte avant ou après le JSON.
                     price=price,
                     notes='Ajouté lors de la confirmation'
                 ))
-        self.db.update_order(order_id, {
+        await self.db.update_order(order_id, {
             'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
             'total_amount': sum(item.price * item.quantity for item in order.items)
         })
@@ -1041,22 +1003,22 @@ Ne mets aucun texte avant ou après le JSON.
             return "completed"
         return step_transitions.get(current_step, current_step)
     
-    def reset_conversation(self, order_id: str) -> dict:
-        self.db.delete_conversation(order_id)
+    async def reset_conversation(self, order_id: str) -> dict:
+        await self.db.delete_conversation(order_id)
         conversation = ConversationState(
             order_id=order_id,
             messages=[],
             current_step="greeting",
             last_active=datetime.utcnow()
         )
-        self.db.update_conversation(order_id, conversation.dict())
-        order_data = self.db.get_order(order_id)
+        await self.db.update_conversation(order_id, conversation.dict())
+        order_data = await self.db.get_order(order_id)
         if not order_data:
             return {"message": "Commande non trouvée"}
         order = Order(**order_data)
         order_context = self._format_order_context(order, language=self._infer_language_from_conversation(conversation))
         # Only use the string part of the tuple returned by _generate_response
-        response, _ = self._generate_response(
+        response, _ = await self._generate_response(
             order_context,
             "greeting",
             "Pas d'historique",
@@ -1067,8 +1029,8 @@ Ne mets aucun texte avant ou après le JSON.
             "message": "Conversation réinitialisée. " + response
         }   
 
-    def start_conversation(self, order_id: str, language: str = "fr") -> str:
-        order_data = self.db.get_order(order_id)
+    async def start_conversation(self, order_id: str, language: str = "fr") -> str:
+        order_data = await self.db.get_order(order_id)
         if not order_data:
             return "Sorry, I can't find this order." if language.startswith("en") else "Désolé, je ne trouve pas cette commande."
         order = Order(**order_data)
@@ -1084,7 +1046,7 @@ Ne mets aucun texte avant ou après le JSON.
         else:
             message = f"Bonjour {order.customer_name}, je vous appelle pour confirmer votre commande. {order_summary} Est-ce que c'est correct ?"
         conversation.messages.append({"role": "assistant", "content": message})
-        self.db.update_conversation(order_id, conversation.dict())
+        await self.db.update_conversation(order_id, conversation.dict())
         return message   
 
     def _format_order_summary_natural(self, order: Order, language: str = "fr") -> str:

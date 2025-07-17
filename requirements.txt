@@ -5,3 +5,5 @@ sqlalchemy>=2.0
 pydantic>=2.0
 python-multipart==0.0.6 
 langdetect 
+httpx
+aiosqlite 
