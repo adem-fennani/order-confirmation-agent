@@ -1,21 +1,31 @@
 from .models import Order, ConversationState, OrderItem
 from .database.sqlite import SQLiteDatabase
-from langchain_core.prompts import ChatPromptTemplate
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 import json
 import re
 from difflib import get_close_matches
 from src.services.ai_service import call_llm, LLMServiceError
-from fastapi.encoders import jsonable_encoder
 
 class OrderConfirmationAgent:
     def __init__(self, db: SQLiteDatabase): 
         self.db = db
 
+    def _detect_language(self, text: str) -> str:
+        en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
+        fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
+        en_count = sum(1 for w in en_words if w in text.lower())
+        fr_count = sum(1 for w in fr_words if w in text.lower())
+        if en_count > fr_count:
+            return 'en'
+        if fr_count > en_count:
+            return 'fr'
+        if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
+            return 'en'
+        return 'fr'
+
     async def process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
         try:
-            # --- Heuristic parsing for user corrections ---
             conversation_data = await self.db.get_conversation(order_id)
             conversation = ConversationState(**conversation_data) if conversation_data else None
             user_input_lower = user_input.strip().lower()
@@ -41,7 +51,6 @@ class OrderConfirmationAgent:
                     if phrase in last_assistant_message.lower():
                         awaiting_confirmation = True
                         break
-            # Heuristic: if user says 'only want X' or 'seulement X', remove all other items except X
             only_want_match = re.search(r'(only want|seulement|juste)\s+(\d+)?\s*([\w\s]+)', user_input_lower)
             if only_want_match:
                 qty = only_want_match.group(2)
@@ -49,16 +58,13 @@ class OrderConfirmationAgent:
                 order_data = await self.db.get_order(order_id)
                 if order_data:
                     order = Order(**order_data)
-                    # Remove all items except the specified one
                     for o_item in order.items:
                         if o_item.name.lower() != item.lower():
                             o_item.quantity = 0
-                    # Set the quantity if specified
                     for o_item in order.items:
                         if o_item.name.lower() == item.lower():
                             if qty:
                                 o_item.quantity = int(qty)
-                    # Remove items with quantity 0
                     order.items = [i for i in order.items if i.quantity > 0]
                     await self.db.update_order(order_id, {
                         'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
@@ -66,21 +72,7 @@ class OrderConfirmationAgent:
                     })
                     items_str = ", ".join([f"{item.name} x{item.quantity}" for item in order.items])
                     total = sum(item.price * item.quantity for item in order.items)
-                    # --- Infer language for confirmation message ---
-                    # Always use the language detected from the most recent user message
-                    def detect_language(text):
-                        en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
-                        fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
-                        en_count = sum(1 for w in en_words if w in text.lower())
-                        fr_count = sum(1 for w in fr_words if w in text.lower())
-                        if en_count > fr_count:
-                            return 'en'
-                        if fr_count > en_count:
-                            return 'fr'
-                        if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
-                            return 'en'
-                        return 'fr'
-                    lang = detect_language(user_input)
+                    lang = self._detect_language(user_input)
                     if lang.startswith("en"):
                         confirmation_message = f"Your order now contains: {items_str}. The total is {total}€. Is your order now correct?"
                     else:
@@ -90,20 +82,7 @@ class OrderConfirmationAgent:
                         await self.db.update_conversation(order_id, conversation.dict())
                     return confirmation_message
             if awaiting_confirmation and user_confirms:
-                # Always use the language detected from the most recent user message
-                def detect_language(text):
-                    en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
-                    fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
-                    en_count = sum(1 for w in en_words if w in text.lower())
-                    fr_count = sum(1 for w in fr_words if w in text.lower())
-                    if en_count > fr_count:
-                        return 'en'
-                    if fr_count > en_count:
-                        return 'fr'
-                    if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
-                        return 'en'
-                    return 'fr'
-                lang = detect_language(user_input)
+                lang = self._detect_language(user_input)
                 if lang.startswith("en"):
                     final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
                 else:
@@ -127,7 +106,6 @@ class OrderConfirmationAgent:
                     )
                     await self.db.update_conversation(order_id, conversation.dict())
                 return final_message
-            # --- End message-history-based confirmation logic ---
             llm_response = await self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
                 return llm_response
@@ -142,16 +120,11 @@ class OrderConfirmationAgent:
             print(f"[LLM ERROR] {e}. Falling back to rule-based agent.")
             return await self.process_message_basic(order_id, user_input)
         except Exception as e:
-            print("[LLM EXCEPTION]", e)  # Debug: print exception details
+            print("[LLM EXCEPTION]", e)
             print(f"[LLM PARSE ERROR] {e}")
-            # User-friendly error message
             return "Sorry, I had trouble understanding your last message. Could you please rephrase or clarify? If the problem persists, a human agent will assist you."
 
     async def llm_process_message(self, order_id: str, user_input: str, language: str = "fr") -> str:
-        """
-        New LLM-centric conversation logic. Handles all steps: greeting, confirmation, modification, etc.
-        Returns the agent's response as a string. Raises on LLM or parsing failure.
-        """
         order_data = await self.db.get_order(order_id)
         if not order_data:
             return "Désolé, je ne trouve pas cette commande. Pouvez-vous vérifier le numéro de commande?"
@@ -172,35 +145,16 @@ class OrderConfirmationAgent:
         conversation.messages.append({"role": "user", "content": user_input})
         conversation.last_active = datetime.utcnow()
 
-        # Always detect language from the most recent user message
-        def detect_language(text):
-            en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
-            fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
-            en_count = sum(1 for w in en_words if w in text.lower())
-            fr_count = sum(1 for w in fr_words if w in text.lower())
-            if en_count > fr_count:
-                return 'en'
-            if fr_count > en_count:
-                return 'fr'
-            # Fallback: if message contains mostly ascii, guess English
-            if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
-                return 'en'
-            return 'fr'
-
-        # Detect language from the latest user message
-        detected_language = detect_language(user_input)
+        detected_language = self._detect_language(user_input)
         language = detected_language
-        # Determine previous assistant message language
         prev_assistant_lang = None
         for msg in reversed(conversation.messages[:-1]):
             if msg["role"] == "assistant":
-                # Heuristic: check for French/English keywords
                 if any(word in msg["content"].lower() for word in ["votre commande", "est-ce correct", "merci", "parfait"]):
                     prev_assistant_lang = "fr"
                 elif any(word in msg["content"].lower() for word in ["your order", "is your order", "thank you", "perfect"]):
                     prev_assistant_lang = "en"
                 break
-        # If language switched, only include the last user message in the prompt
         if prev_assistant_lang and prev_assistant_lang != detected_language:
             conversation_history = f"Client: {user_input}"
         else:
@@ -463,7 +417,7 @@ Exemples :
                         data["message"] = confirmation_message
             else:
                 # Clear pending_modification if not a modification action
-                pass # This line is removed as conversation is passed as an argument
+                pass
             # Save conversation state
             # Force the agent to always generate its own message in the detected language for confirm/final state
             if data.get("action") == "confirm":
@@ -1045,7 +999,7 @@ Ne mets aucun texte avant ou après le JSON.
         print(f"[DEBUG] _process_modification: applied modification, clearing modification_request")
         conversation.modification_request = None
         conversation.current_step = "confirming_items"
-        updated_context = self._format_order_context(order, language=self._infer_language_from_conversation(conversation))
+        updated_context = self._format_order_context(order, language=self._detect_language(user_input))
         return (f"Modification effectuée ! Voici votre commande mise à jour:\n"
                 f"{updated_context.split('Articles:')[1].split('Total:')[0]}\n"
                 f"Total: {updated_context.split('Total: ')[1].split('€')[0]}€\n"
@@ -1082,7 +1036,7 @@ Ne mets aucun texte avant ou après le JSON.
         if not order_data:
             return {"message": "Commande non trouvée"}
         order = Order(**order_data)
-        order_context = self._format_order_context(order, language=self._infer_language_from_conversation(conversation))
+        order_context = self._format_order_context(order, language=self._detect_language("Bonjour"))
         # Only use the string part of the tuple returned by _generate_response
         response, _ = await self._generate_response(
             order_context,
@@ -1146,30 +1100,4 @@ Ne mets aucun texte avant ou après le JSON.
                     else:
                         item_strs.append(f"{item.quantity}x {item.name} ({item.price:.1f}€ chacun)")
                 total = sum(item.price * item.quantity for item in items)
-                return f"Vous avez commandé {', '.join(item_strs)} pour un total de {total:.1f}€."
-
-    def _infer_language_from_conversation(self, conversation):
-        # Try to infer language from the last user message
-        import re
-        for msg in reversed(conversation.messages):
-            if msg['role'] == 'user':
-                text = msg['content'].strip()
-                # Heuristic: if message is a single word like 'yes', 'no', etc., check for English/French
-                if re.fullmatch(r"yes|no|ok|correct|thanks|thank you", text.lower()):
-                    return 'en'
-                if re.fullmatch(r"oui|non|d'accord|merci|parfait", text.lower()):
-                    return 'fr'
-                # Otherwise, use a simple heuristic: more English or French words
-                en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add']
-                fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer']
-                en_count = sum(1 for w in en_words if w in text.lower())
-                fr_count = sum(1 for w in fr_words if w in text.lower())
-                if en_count > fr_count:
-                    return 'en'
-                if fr_count > en_count:
-                    return 'fr'
-                # Fallback: if message contains mostly ascii, guess English
-                if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
-                    return 'en'
-                return 'fr'
-        return 'fr' 
+                return f"Vous avez commandé {', '.join(item_strs)} pour un total de {total:.1f}€." 
