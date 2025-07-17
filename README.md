@@ -2,7 +2,7 @@
 
 ## Description du projet
 
-Ce projet vise à créer un prototype d’agent vocal (ou textuel) capable de :
+Ce projet vise à créer un prototype d’agent vocal capable de :
 
 - Recevoir une commande client (depuis WhatsApp ou un formulaire web).
 - Contacter ou répondre au client pour confirmer les détails de la commande.
@@ -16,26 +16,23 @@ L’objectif est de simuler un assistant vocal intelligent qui interagit avec le
 ## Fonctionnalités principales
 
 - **Réception des commandes** : via messages WhatsApp ou formulaire web.
-- **Transcription vocale** : utilisation de Whisper pour convertir la voix en texte.
 - **Analyse intelligente** : LangChain pour reformuler, questionner et valider la commande.
-- **Synthèse vocale** : ElevenLabs ou Coqui pour répondre vocalement au client.
 - **Interface d’échange** : via Twilio (en production) ou en mode local (micro/casque).
-- **Base de données simulée** : stockage des commandes confirmées dans un fichier JSON ou SQLite.
+- **Base de données** : stockage des commandes confirmées dans une base de données SQLite.
 - **Interaction** : confirmation de commande par appel vocal ou chat.
 
 ---
 
 ## Technologies & outils utilisés
 
-| Fonction         | Technologie / Outil           |
-| ---------------- | ----------------------------- |
-| Speech-to-Text   | Whisper                       |
-| Text-to-Speech   | ElevenLabs ou Coqui           |
-| Interface vocale | Twilio Voice ou local         |
-| Backend API      | Python + FastAPI (ou Node.js) |
-| Agent IA         | LangChain (prompt + mémoire)  |
-| Orchestration    | Flowise ou CrewAI (optionnel) |
-| Base de données  | JSON ou SQLite (mockée)       |
+| Fonction         | Technologie / Outil          |
+| ---------------- | ---------------------------- |
+| Interface vocale | Twilio Voice ou local        |
+| Backend API      | Python + FastAPI             |
+| Agent IA         | LangChain (prompt + mémoire) |
+| LLM              | Google Generative AI         |
+| Base de données  | SQLite                       |
+| Interface Web    | HTML, CSS, JavaScript        |
 
 ---
 
@@ -46,8 +43,6 @@ L’objectif est de simuler un assistant vocal intelligent qui interagit avec le
 - Python 3.11+
 - pip
 - (Optionnel) Compte Twilio avec numéro vocal configuré
-- Clés API ElevenLabs (pour TTS)
-- Accès à Whisper (local ou API)
 
 ### Étapes d’installation
 
@@ -77,10 +72,8 @@ L’objectif est de simuler un assistant vocal intelligent qui interagit avec le
    ```
    TWILIO_ACCOUNT_SID=xxxxxxx
    TWILIO_AUTH_TOKEN=xxxxxxx
-   ELEVENLABS_API_KEY=xxxxxxx
+   GOOGLE_API_KEY=xxxxxxx
    ```
-
-5. (Optionnel) Préparer la base de données simulée (`orders.json` ou SQLite).
 
 ---
 
@@ -91,3 +84,75 @@ L’objectif est de simuler un assistant vocal intelligent qui interagit avec le
 ```bash
 uvicorn main:app --reload
 ```
+
+---
+
+## API Endpoints
+
+The application exposes the following API endpoints:
+
+- `GET /orders`: Retrieve a list of all orders.
+- `GET /orders/{order_id}`: Retrieve details for a specific order.
+- `POST /orders`: Create a new order.
+- `POST /orders/{order_id}/confirm`: Initiate the order confirmation process for a given order.
+- `POST /orders/{order_id}/message`: Send a message to the agent for a specific order, triggering a response.
+- `GET /orders/{order_id}/conversation`: Retrieve the conversation history for a specific order.
+- `DELETE /orders/{order_id}`: Delete an order.
+- `PUT /orders/{order_id}`: Update an existing order.
+- `POST /orders/{order_id}/reset`: Reset the conversation for a specific order.
+
+---
+
+## Structure du projet
+
+```
+.
+├───src/
+│   ├───main.py             # Point d'entrée de l'application FastAPI
+│   ├───agent/              # Logique de l'agent de confirmation de commande
+│   │   ├───agent.py        # Implémentation de l'agent (LangChain, LLM)
+│   │   ├───models.py       # Modèles de données (Pydantic)
+│   │   └───database/       # Gestion de la base de données
+│   │       ├───sqlite.py   # Implémentation SQLite
+│   │       └───models.py   # Modèles SQLAlchemy
+│   ├───api/                # Définition des routes API
+│   │   ├───routes.py       # Routes FastAPI
+│   │   ├───schemas.py      # Schémas de validation (Pydantic)
+│   │   └───dependencies.py # Dépendances FastAPI (DB, Agent)
+│   ├───services/           # Services externes (LLM, TTS, STT)
+│   │   └───ai_service.py   # Intégration avec les modèles d'IA
+│   └───web/                # Fichiers statiques pour l'interface web
+│       ├───index.html      # Interface utilisateur
+│       ├───script.js       # Logique JavaScript du frontend
+│       └───style.css       # Styles CSS
+├───tests/                  # Tests unitaires et d'intégration
+├───config/                 # Fichiers de configuration
+├───docs/                   # Documentation additionnelle
+├───requirements.txt        # Dépendances Python
+├───README.md               # Ce fichier
+└───.env                    # Fichier d'environnement
+```
+
+---
+
+## Contribution
+
+Les contributions sont les bienvenues ! Veuillez suivre les étapes suivantes :
+
+1.  Fork le dépôt.
+2.  Créez une nouvelle branche (`git checkout -b feature/nouvelle-fonctionnalite`).
+3.  Effectuez vos modifications et commitez-les (`git commit -am 'feat: ajouter une nouvelle fonctionnalité'`).
+4.  Poussez la branche (`git push origin feature/nouvelle-fonctionnalite`).
+5.  Créez une Pull Request.
+
+---
+
+## Licence
+
+Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+
+---
+
+## Contact
+
+Pour toute question ou suggestion, veuillez contacter [Adem Fennani](mailto:ademfennani7@gmail.com).

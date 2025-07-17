@@ -67,7 +67,20 @@ class OrderConfirmationAgent:
                     items_str = ", ".join([f"{item.name} x{item.quantity}" for item in order.items])
                     total = sum(item.price * item.quantity for item in order.items)
                     # --- Infer language for confirmation message ---
-                    lang = self._infer_language_from_conversation(conversation) if conversation else language
+                    # Always use the language detected from the most recent user message
+                    def detect_language(text):
+                        en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
+                        fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
+                        en_count = sum(1 for w in en_words if w in text.lower())
+                        fr_count = sum(1 for w in fr_words if w in text.lower())
+                        if en_count > fr_count:
+                            return 'en'
+                        if fr_count > en_count:
+                            return 'fr'
+                        if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
+                            return 'en'
+                        return 'fr'
+                    lang = detect_language(user_input)
                     if lang.startswith("en"):
                         confirmation_message = f"Your order now contains: {items_str}. The total is {total}€. Is your order now correct?"
                     else:
@@ -77,8 +90,20 @@ class OrderConfirmationAgent:
                         await self.db.update_conversation(order_id, conversation.dict())
                     return confirmation_message
             if awaiting_confirmation and user_confirms:
-                # --- Infer language for final confirmation ---
-                lang = self._infer_language_from_conversation(conversation) if conversation else language
+                # Always use the language detected from the most recent user message
+                def detect_language(text):
+                    en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
+                    fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
+                    en_count = sum(1 for w in en_words if w in text.lower())
+                    fr_count = sum(1 for w in fr_words if w in text.lower())
+                    if en_count > fr_count:
+                        return 'en'
+                    if fr_count > en_count:
+                        return 'fr'
+                    if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
+                        return 'en'
+                    return 'fr'
+                lang = detect_language(user_input)
                 if lang.startswith("en"):
                     final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
                 else:
@@ -147,7 +172,7 @@ class OrderConfirmationAgent:
         conversation.messages.append({"role": "user", "content": user_input})
         conversation.last_active = datetime.utcnow()
 
-        # Detect language from the current user message
+        # Always detect language from the most recent user message
         def detect_language(text):
             en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
             fr_words = ['oui', 'non', "d'accord", 'merci', 'commande', 'retirer', 'ajouter', 'supprimer', 'aider', 'annuler']
@@ -162,10 +187,26 @@ class OrderConfirmationAgent:
                 return 'en'
             return 'fr'
 
+        # Detect language from the latest user message
         detected_language = detect_language(user_input)
-        order_context = self._format_order_context(order, language=detected_language)
-        conversation_history = self._format_conversation_history(conversation.messages)
         language = detected_language
+        # Determine previous assistant message language
+        prev_assistant_lang = None
+        for msg in reversed(conversation.messages[:-1]):
+            if msg["role"] == "assistant":
+                # Heuristic: check for French/English keywords
+                if any(word in msg["content"].lower() for word in ["votre commande", "est-ce correct", "merci", "parfait"]):
+                    prev_assistant_lang = "fr"
+                elif any(word in msg["content"].lower() for word in ["your order", "is your order", "thank you", "perfect"]):
+                    prev_assistant_lang = "en"
+                break
+        # If language switched, only include the last user message in the prompt
+        if prev_assistant_lang and prev_assistant_lang != detected_language:
+            conversation_history = f"Client: {user_input}"
+        else:
+            conversation_history = self._format_conversation_history(conversation.messages)
+        order_context = self._format_order_context(order, language=language)
+        conversation_history = self._format_conversation_history(conversation.messages)
         # Add explicit clarification examples for ambiguous/help requests
         if language.startswith("en"):
             language_instruction = (
@@ -368,7 +409,8 @@ Exemples :
                     data["message"] = msg_match.group(1)
             # If the LLM action is confirm, update the order status
             if data.get("action") == "confirm":
-                if language.startswith("en"):
+                # Always use the language detected from the most recent user message
+                if detected_language.startswith("en"):
                     final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
                 else:
                     final_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
@@ -423,19 +465,36 @@ Exemples :
                 # Clear pending_modification if not a modification action
                 pass # This line is removed as conversation is passed as an argument
             # Save conversation state
-            conversation.messages.append({"role": "assistant", "content": data["message"]})
-            await self.db.update_conversation(order_id, conversation.dict())
-            return data["message"]
+            # Force the agent to always generate its own message in the detected language for confirm/final state
+            if data.get("action") == "confirm":
+                if detected_language.startswith("en"):
+                    agent_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
+                else:
+                    agent_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
+                conversation.messages.append({"role": "assistant", "content": agent_message})
+                await self.db.update_conversation(order_id, conversation.dict())
+                return agent_message
+            else:
+                conversation.messages.append({"role": "assistant", "content": data["message"]})
+                await self.db.update_conversation(order_id, conversation.dict())
+                return data["message"]
         except Exception as e:
             print(f"[LLM PARSE ERROR] {e}")
             raise
 
-    def _normalize_modification(self, modification):
+    def _normalize_modification(self, modification, action=None):
         mod = modification if isinstance(modification, dict) else {}
-        # Special case: treat 'modify' with same item as quantity update, not replace
-        if mod.get('action') == 'modify' and mod.get('item') and (
-            mod.get('old_item') is None or mod.get('old_item') == mod.get('item')):
-            norm = {"action": "modify", "old_item": mod.get('item'), "new_item": mod.get('item'), "old_qty": None, "new_qty": int(mod.get('quantity', 1))}
+        # Use the parent action if not present in the modification dict
+        mod_action = mod.get('action') or action
+        # Handle 'modify' action as a set operation
+        if mod_action == 'modify' and mod.get('item') and mod.get('quantity'):
+            norm = {
+                "action": "modify",
+                "old_item": mod.get('item'),
+                "new_item": mod.get('item'),
+                "old_qty": None,
+                "new_qty": int(mod.get('quantity', 1))
+            }
             return norm
         """
         Normalize any LLM modification dict to a canonical format:
@@ -555,7 +614,7 @@ Exemples :
 
     async def _apply_llm_modification(self, order_id, order, modification, action, conversation, user_input=None) -> bool:
         """Apply the modification as instructed by the LLM. Uses normalized canonical format. Prevents duplicate modifications."""
-        norm = self._normalize_modification(modification)
+        norm = self._normalize_modification(modification, action)
         print(f"[NORM] Normalized modification: {norm}")
         # --- Prevent duplicate modifications ---
         # conversation_data = await self.db.get_conversation(order_id) # This line is removed as conversation is passed as an argument
@@ -605,6 +664,13 @@ Exemples :
                             order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
                         break
             applied = True
+        elif norm["action"] == "modify" and norm["old_item"] and norm["new_item"] and norm["new_qty"] is not None:
+            # Set the quantity of the item directly
+            for item in order.items:
+                if item.name.lower() == norm["old_item"].lower():
+                    item.quantity = norm["new_qty"]
+                    applied = True
+                    break
         if not applied:
             print(f"[WARN] Could not apply normalized modification: {norm}")
             return False
@@ -1106,4 +1172,4 @@ Ne mets aucun texte avant ou après le JSON.
                 if len([c for c in text if ord(c) < 128]) / max(1, len(text)) > 0.9:
                     return 'en'
                 return 'fr'
-        return 'fr'
+        return 'fr' 

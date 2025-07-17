@@ -56,6 +56,10 @@ async def call_llm(prompt, model=DEFAULT_MODEL, system_prompt=None, max_tokens=5
         )
         return response.text
     except Exception as e:
+        # Programmatic quota error detection: check for quota-related errors in the exception message
+        msg = str(e).lower()
+        if ("quota" in msg or "exceed" in msg or "resource exhausted" in msg or "too many requests" in msg):
+            raise LLMServiceError("quota_exceeded")
         raise LLMServiceError(f"LLM call failed: {e}")
 
 # Usage example (remove or comment out in production):
