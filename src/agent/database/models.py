@@ -17,6 +17,7 @@ class OrderModel(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     confirmed_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
+    delivery_address = Column(Text, nullable=True)  # Added for delivery address confirmation step
 
 class ConversationModel(Base):
     __tablename__ = 'conversations'
@@ -26,3 +27,4 @@ class ConversationModel(Base):
     current_step = Column(String(50), default='greeting')
     confirmed_items = Column(JSON, default=[])
     issues_found = Column(JSON, default=[])
+    notes = Column(Text, nullable=True)  # For storing extra JSON data like pending_address

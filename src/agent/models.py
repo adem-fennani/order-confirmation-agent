@@ -19,6 +19,7 @@ class Order(BaseModel):
     created_at: str
     confirmed_at: Optional[str] = None
     notes: Optional[str] = None
+    delivery_address: Optional[str] = None  # Added for delivery address confirmation step
 
     @validator('items', pre=True)
     def parse_items(cls, v):
@@ -29,9 +30,10 @@ class Order(BaseModel):
 class ConversationState(BaseModel):
     order_id: str
     messages: List[Dict[str, str]]
-    current_step: str = "greeting"  # greeting, confirming_items, confirming_details, final_confirmation
+    current_step: str = "greeting"  # greeting, confirming_items, confirming_address, confirming_details, final_confirmation
     confirmed_items: List[Dict] = []
     issues_found: List[str] = []
     modification_request: Optional[Dict] = None
     last_modification: Optional[tuple] = None
-    last_active: datetime = Field(default_factory=datetime.utcnow) 
+    pending_address: Optional[str] = None  # Persist delivery address being confirmed
+    last_active: datetime = Field(default_factory=datetime.utcnow)

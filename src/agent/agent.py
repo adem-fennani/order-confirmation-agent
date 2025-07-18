@@ -83,29 +83,65 @@ class OrderConfirmationAgent:
                     return confirmation_message
             if awaiting_confirmation and user_confirms:
                 lang = self._detect_language(user_input)
+                # Only transition if not already in confirming_address and no pending_address
+                if not (conversation.current_step == "confirming_address" and conversation.pending_address):
+                    conversation.current_step = "confirming_address"
+                    conversation.pending_address = None
+                    if lang.startswith("en"):
+                        address_prompt = "Could you please provide your delivery address?"
+                    else:
+                        address_prompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
+                    conversation.messages.append({"role": "assistant", "content": address_prompt})
+                    await self.db.update_conversation(order_id, conversation.dict())
+                    return address_prompt
+                # If already in confirming_address and address is pending, fall through to address confirmation logic below
+
+
+            if conversation and getattr(conversation, 'current_step', None) == "confirming_address":
+                address = user_input.strip()
+                lang = self._detect_language(user_input)
+                # If user confirms and pending_address exists, finalize
+                if address.lower() in ["oui", "yes", "ok", "d'accord", "correct"]:
+                    if conversation.pending_address:
+                        await self.db.update_order(order_id, {"delivery_address": conversation.pending_address, "status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()})
+                        if lang.startswith("en"):
+                            final_message = "Thank you! Your address is confirmed and your order is now being prepared."
+                        else:
+                            final_message = "Merci ! Votre adresse est confirmée et votre commande est en préparation."
+                        conversation.messages.append({"role": "assistant", "content": final_message})
+                        conversation.current_step = "completed"
+                        conversation.pending_address = None
+                        await self.db.update_conversation(order_id, conversation.dict())
+                        return final_message
+                    else:
+                        # No pending address, reprompt
+                        if lang.startswith("en"):
+                            reprompt = "Could you please provide your delivery address?"
+                        else:
+                            reprompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
+                        conversation.messages.append({"role": "assistant", "content": reprompt})
+                        await self.db.update_conversation(order_id, conversation.dict())
+                        return reprompt
+                # If user says no, clear pending address and reprompt
+                if address.lower() in ["non", "no", "incorrect", "erreur"]:
+                    conversation.pending_address = None
+                    if lang.startswith("en"):
+                        reprompt = "Sorry, could you please provide your correct delivery address?"
+                    else:
+                        reprompt = "Désolé, pouvez-vous me donner votre adresse de livraison correcte ?"
+                    conversation.messages.append({"role": "assistant", "content": reprompt})
+                    await self.db.update_conversation(order_id, conversation.dict())
+                    return reprompt
+                # Otherwise, treat input as address and ask for confirmation
+                conversation.pending_address = address
                 if lang.startswith("en"):
-                    final_message = "Perfect, your order is confirmed. We are now preparing it. Thank you!"
+                    confirm_prompt = f"Just to confirm, is this your delivery address: '{address}'? (yes/no)"
                 else:
-                    final_message = "Parfait, votre commande est confirmée. Nous procédons à sa préparation. Merci !"
-                await self.db.update_order(
-                    order_id,
-                    {
-                        "status": "confirmed",
-                        "confirmed_at": datetime.utcnow().isoformat()
-                    }
-                )
-                if conversation:
-                    conversation.messages.append({"role": "assistant", "content": final_message})
-                    conversation.current_step = "completed"
-                    await self.db.update_conversation(order_id, conversation.dict())
-                else:
-                    conversation = ConversationState(
-                        order_id=order_id,
-                        messages=[{"role": "assistant", "content": final_message}],
-                        current_step="completed"
-                    )
-                    await self.db.update_conversation(order_id, conversation.dict())
-                return final_message
+                    confirm_prompt = f"Pour confirmer, est-ce bien votre adresse de livraison : '{address}' ? (oui/non)"
+                conversation.messages.append({"role": "assistant", "content": confirm_prompt})
+                await self.db.update_conversation(order_id, conversation.dict())
+                return confirm_prompt
+
             llm_response = await self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
                 return llm_response
@@ -800,6 +836,46 @@ Status: {order.status}
             result, conversation = await self._process_modification(order_context, user_input, conversation=conversation)
             print(f"[DEBUG] _generate_response (after _process_modification): modification_request={getattr(conversation, 'modification_request', None)}")
             return (result, conversation)
+        elif current_step == "confirming_address":
+            # Prompt user for delivery address or confirm it
+            address = getattr(conversation, 'pending_address', None)
+            lang = self._detect_language(user_input)
+            if not address:
+                # Try to extract address from user_input
+                user_address = user_input.strip()
+                if any(word in user_address.lower() for word in ["oui", "correct", "ok", "d'accord"]):
+                    # User just said yes, but no address provided; ask for address
+                    if lang.startswith("en"):
+                        return ("Could you please provide your delivery address?", conversation)
+                    else:
+                        return ("Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?", conversation)
+                # Save address in conversation state for confirmation
+                conversation.pending_address = user_address
+                if lang.startswith("en"):
+                    return (f"Just to confirm, is this your delivery address: '{user_address}'? (Yes/No)", conversation)
+                else:
+                    return (f"Pour confirmer, est-ce bien votre adresse de livraison : '{user_address}' ? (Oui/Non)", conversation)
+            else:
+                # User confirms the address
+                if any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
+                    # Save address to order and clear pending_address
+                    order_id = conversation.order_id
+                    await self.db.update_order(order_id, {"delivery_address": address})
+                    conversation.delivery_address = address
+                    conversation.pending_address = None
+                    conversation.current_step = "confirming_details"
+                    if lang.startswith("en"):
+                        return ("Thank you! Now, could you confirm your name and any other delivery details?", conversation)
+                    else:
+                        return ("Merci ! Maintenant, pouvez-vous confirmer votre nom et d'autres détails de livraison ?", conversation)
+                else:
+                    # User said no, ask for address again
+                    conversation.pending_address = None
+                    if lang.startswith("en"):
+                        return ("Okay, please provide the correct delivery address.", conversation)
+                    else:
+                        return ("D'accord, merci de fournir la bonne adresse de livraison.", conversation)
+
         elif current_step == "confirming_details":
             # Ask for explicit final confirmation before proceeding
             conversation.current_step = "final_confirmation"
@@ -818,258 +894,33 @@ Status: {order.status}
                 return ("Très bien, votre commande est annulée. N'hésitez pas à nous recontacter. Bonne journée !", conversation)
         return ("Je ne suis pas sûr de comprendre. Pouvez-vous répéter ?", conversation)
 
-    def _is_clear_confirmation(self, text: str) -> bool:
-        positive = ["oui", "correct", "ok", "d'accord", "exact", "parfait"]
-        negative = ["non", "incorrect", "erreur", "changer", "modifier"]
-        text_lower = text.lower()
-        return any(word in text_lower for word in positive + negative)
-
-    async def _handle_modification_request(self, order_context: str, user_input: str = "") -> str:
-        items_text = order_context.split('Articles:')[1].split('Total:')[0]
-        # Extract item names from items_text
-        order_items = [line.split(' x')[0].strip('- ').strip() for line in items_text.split('\n') if line.strip() and 'x' in line]
-        if not user_input:
-            return ("Je peux vous aider à modifier votre commande. "
-                    "Quel article souhaitez-vous modifier ou supprimer ?\n"
-                    "Voici les articles actuels :\n"
-                    f"{items_text}\n"
-                    "Vous pouvez dire par exemple :\n"
-                    "- 'Je veux changer le burger classique en burger végétarien'\n"
-                    "- 'Je veux supprimer les frites'")
-        modification = await self._parse_modification_request(user_input, items_text, order_items)
-        if not modification:
-            return ("Je n'ai pas bien compris quelle modification vous souhaitez faire. "
-                    "Pouvez-vous reformuler ? Par exemple:\n"
-                    "- 'Je veux changer le burger classique en burger végétarien'\n"
-                    "- 'Je veux supprimer les frites'")
-        conversation_data = await self.db.get_conversation(order_context.split('Commande ID: ')[1].split('\n')[0])
-        if conversation_data:
-            conversation = ConversationState(**conversation_data)
-            conversation.modification_request = modification
-            conversation.current_step = "modifying_items"
-            await self.db.update_conversation(conversation.order_id, conversation.dict())
-        return self._get_modification_confirmation_prompt(modification)
-
-    async def _parse_modification_request(self, user_input: str, items_text: str, order_items: list) -> Optional[Dict]:
-        items_json = json.dumps(order_items)
-        prompt = f"""
-Voici la liste des articles de la commande : {items_json}
-Le client a dit : \"{user_input}\"
-
-Déduis l'intention de modification. Réponds uniquement avec un JSON strictement de la forme :
-{{
-  "action": "replace" | "remove" | "add" | "none",
-  "old_item": "...",
-  "new_item": "...",
-  "item": "...",
-  "quantity": "...", // Only for add/remove actions, if specified by the user (e.g., "add 2 laptops")
-  "raw": "..."
-}}
-Ne mets aucun texte avant ou après le JSON.
-"""
-        try:
-            llm_response = await call_llm(prompt, max_tokens=256)
-            print("LLM RAW RESPONSE:", llm_response)  # For debugging
-            json_str = llm_response.strip()
-            json_str = json_str.replace("'", '"')
-            json_str = re.sub(r'//.*', '', json_str)
-            json_str = re.sub(r',([ \t\r\n]*[}\]])', r'\1', json_str)
-            match = re.search(r'\{.*\}', json_str, re.DOTALL)
-            if match:
-                data = json.loads(match.group(0))
-                # Fuzzy match old_item/new_item/item to actual order items
-                for key in ["old_item", "new_item", "item"]:
-                    if data.get(key):
-                        closest = self._find_closest_item(data[key], order_items)
-                        if closest:
-                            data[key] = closest
-                if data.get("action") in {"replace", "remove", "add"}:
-                    return data
-        except (LLMServiceError, json.JSONDecodeError, Exception) as e:
-            print("LLM parsing error:", e)
-            pass  # Fallback to old logic below
-        # --- Fallback: old heuristic logic ---
-        cleaned_input = ' '.join(user_input.splitlines()).strip()
-        cleaned_input_lower = cleaned_input.lower()
-        items_in_order = [item.lower() for item in order_items]
-        # Remove logic for treating add as remove
-        if any(word in cleaned_input_lower for word in ["supprimer", "enlever", "retirer"]):
-            for item in items_in_order:
-                if item in cleaned_input_lower:
-                    return {
-                        'action': 'remove',
-                        'item': item,
-                        'original_text': next(line for line in items_text.split('\n') if item in line.lower())
-                    }
-        change_words = ["changer", "remplacer", "modifier", "échange"]
-        if any(word in cleaned_input_lower for word in change_words):
-            change_word = next(word for word in change_words if word in cleaned_input_lower)
-            parts = cleaned_input.split(change_word, 1)
-            if len(parts) > 1:
-                before_change = parts[0].strip()
-                after_change = parts[1].strip()
-                for connector in ["le", "la", "les", "de", "par", "en", "pour"]:
-                    after_change = after_change.replace(connector, "").strip()
-                old_item = self._find_best_match(before_change, items_in_order)
-                new_item = after_change
-                if old_item:
-                    return {
-                        'action': 'replace',
-                        'old_item': old_item,
-                        'new_item': new_item
-                    }
-        # Add logic: only allow adding more of existing items
-        if any(word in cleaned_input_lower for word in ["ajouter", "ajoutez", "ajoute", "add"]):
-            for item in items_in_order:
-                # Look for patterns like 'add 3 chairs' or 'ajouter 3 chaises'
-                # Try both English and French orderings
-                # e.g. 'add 3 chairs', 'ajouter 3 chaises', 'add chairs', 'ajouter chaises'
-                # Try to extract quantity
-                # Look for number before or after the item
-                match = re.search(r'(\d+)\s*' + re.escape(item), cleaned_input_lower)
-                if match:
-                    quantity = int(match.group(1))
-                    return {
-                        'action': 'add',
-                        'item': item,
-                        'quantity': quantity
-                    }
-                match = re.search(re.escape(item) + r'\s*(?:de)?\s*(\d+)', cleaned_input_lower)
-                if match:
-                    quantity = int(match.group(1))
-                    return {
-                        'action': 'add',
-                        'item': item,
-                        'quantity': quantity
-                    }
-                # If just 'add chairs' or 'ajouter chaises'
-                if item in cleaned_input_lower:
-                    return {
-                        'action': 'add',
-                        'item': item,
-                        'quantity': 1
-                    }
-            # If no existing item found, do not allow adding new items
-            return None
-        return None
-
-    def _find_closest_item(self, name, items):
-        matches = get_close_matches(name, items, n=1, cutoff=0.6)
-        return matches[0] if matches else name
-
-    def _find_best_match(self, text: str, items: List[str]) -> Optional[str]:
-        text_lower = text.lower()
-        for item in items:
-            if item in text_lower:
-                return item
-        return None
-
-    def _get_modification_confirmation_prompt(self, modification: Dict) -> str:
-        if modification['action'] == 'remove':
-            item_name = modification['item'].capitalize()
-            return (f"Je comprends que vous souhaitez supprimer '{item_name}' de votre commande. "
-                    "Est-ce correct ? (Oui/Non)")
-        elif modification['action'] == 'replace':
-            old_item = modification['old_item'].capitalize()
-            new_item = modification['new_item'].capitalize()
-            return (f"Je comprends que vous souhaitez remplacer '{old_item}' "
-                    f"par '{new_item}'. Est-ce correct ? (Oui/Non)")
-        elif modification['action'] == 'add':
-            item_name = modification['item'].capitalize()
-            return (f"Je comprends que vous souhaitez ajouter '{item_name}' "
-                    "à votre commande. Est-ce correct ? (Oui/Non)")
-        return "Je n'ai pas compris la modification demandée. Pouvez-vous reformuler ?"
-
-    async def _process_modification(self, order_context: str, user_input: str, conversation=None) -> Tuple[str, ConversationState]:
-        order_id = order_context.split('Commande ID: ')[1].split('\n')[0]
-        if conversation is None:
-            conversation_data = await self.db.get_conversation(order_id)
-            if not conversation_data or not conversation_data.get('modification_request'):
-                # Always return a ConversationState object
-                conversation = ConversationState(order_id=order_id, messages=[], current_step="confirming_items")
-                return ("Je ne trouve pas la demande de modification. Pouvez-vous répéter ?", conversation)
-            conversation = ConversationState(**conversation_data)
-        print(f"[DEBUG] _process_modification: modification_request={getattr(conversation, 'modification_request', None)}")
-        modification = conversation.modification_request
-        if modification is None:
-            return ("Je ne trouve pas la demande de modification. Pouvez-vous répéter ?", conversation)
-        if modification['action'] == 'cancel':
-            await self.db.update_order(order_id, {'status': 'cancelled'})
-            conversation.modification_request = None
-            conversation.current_step = "completed"
-            return ("Votre commande a été annulée. Merci et à bientôt.", conversation)
-        user_input_lower = user_input.lower()
-        if any(word in user_input_lower for word in ["non", "incorrect", "erreur"]):
-            conversation.modification_request = None
-            conversation.current_step = "confirming_items"
-            return ("D'accord, annulons cette modification. Quel article souhaitez-vous modifier ?", conversation)
-        if not any(word in user_input_lower for word in ["oui", "correct", "ok", "d'accord"]):
-            return ("Je ne suis pas sûr d'avoir compris. Confirmez-vous cette modification ? (Oui/Non)", conversation)
-        order_data = await self.db.get_order(order_id)
-        if not order_data:
-            return ("Désolé, je ne trouve pas cette commande.", conversation)
-        order = Order(**order_data)
-        if modification['action'] == 'remove':
-            order.items = [item for item in order.items if item.name != modification['item']]
-        elif modification['action'] == 'replace':
-            old_item_name = modification['old_item']
-            item_names = [item.name for item in order.items]
-            closest = get_close_matches(old_item_name, item_names, n=1, cutoff=0.6)
-            if closest:
-                for item in order.items:
-                    if item.name == closest[0]:
-                        item.name = modification['new_item']
-                        break
-        elif modification['action'] == 'add':
-            item_name_to_add = modification['item']
-            quantity_to_add = modification.get('quantity', 1)
-            existing_item = next((item for item in order.items if item.name.lower() == item_name_to_add.lower()), None)
-            if existing_item:
-                existing_item.quantity += quantity_to_add
-            else:
-                price = 0
-                # Try to find a similar item to get its price from the current order items
-                for item in order.items:
-                    if item.name.lower() == item_name_to_add.lower():
-                        price = item.price
-                        break
-                order.items.append(OrderItem(
-                    name=item_name_to_add,
-                    quantity=quantity_to_add,
-                    price=price,
-                    notes='Ajouté lors de la confirmation'
-                ))
-        await self.db.update_order(order_id, {
-            'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
-            'total_amount': sum(item.price * item.quantity for item in order.items)
-        })
-        print(f"[DEBUG] _process_modification: applied modification, clearing modification_request")
-        conversation.modification_request = None
-        conversation.current_step = "confirming_items"
-        updated_context = self._format_order_context(order, language=self._detect_language(user_input))
-        return (f"Modification effectuée ! Voici votre commande mise à jour:\n"
-                f"{updated_context.split('Articles:')[1].split('Total:')[0]}\n"
-                f"Total: {updated_context.split('Total: ')[1].split('€')[0]}€\n"
-                "Est-ce que tout est correct maintenant ?", conversation)
-    
     def _determine_next_step(self, current_step: str, user_input: str, response: str) -> str:
         step_transitions = {
             "greeting": "confirming_items",
-            "confirming_items": "confirming_items",
+            "confirming_items": "confirming_address",
+            "confirming_address": "confirming_details",
             "modifying_items": "confirming_items",
             "confirming_details": "final_confirmation",
             "final_confirmation": "completed"
         }
+        # If user wants to modify items
         if current_step == "confirming_items" and any(word in user_input.lower() 
         for word in ["changer", "modifier", "remplacer", "supprimer", "ajouter"]):
             return "modifying_items"
-        if current_step == "confirming_items" and any(word in response.lower() 
-        for word in ["nom et votre adresse", "détails de livraison"]):
+        # If we just finished confirming items, go to confirming_address
+        if current_step == "confirming_items" and any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
+            return "confirming_address"
+        # If address is confirmed, move to confirming_details
+        if current_step == "confirming_address" and any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
             return "confirming_details"
+        # If confirming details, move to final confirmation
+        if current_step == "confirming_details" and any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
+            return "final_confirmation"
+        # If final confirmation, complete
         if current_step == "final_confirmation" and any(word in user_input.lower() for word in ["oui", "confirme", "ok", "d'accord"]):
             return "completed"
         return step_transitions.get(current_step, current_step)
-    
+
     async def reset_conversation(self, order_id: str) -> dict:
         await self.db.delete_conversation(order_id)
         conversation = ConversationState(
@@ -1123,7 +974,7 @@ Ne mets aucun texte avant ou après le JSON.
         if language.startswith("en"):
             if len(items) == 1:
                 item = items[0]
-                total = item.price * item.quantity
+                total = item.price * item.quantity1
                 return f"You ordered {item.quantity}x {item.name.lower()} for a total of {total:.1f}€."
             else:
                 item_strs = []

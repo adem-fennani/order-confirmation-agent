@@ -67,12 +67,22 @@ class SQLiteDatabase(DatabaseInterface):
             result = await session.execute(select(ConversationModel).filter_by(order_id=order_id))
             conv = result.scalars().first()
             if conv:
+                # Try to load pending_address if present (backward compatible)
+                pending_address = getattr(conv, 'pending_address', None)
+                try:
+                    # If stored as a JSON in notes or elsewhere
+                    if hasattr(conv, 'notes') and conv.notes:
+                        notes_data = json.loads(conv.notes)
+                        pending_address = notes_data.get('pending_address', pending_address)
+                except Exception:
+                    pass
                 return {
                     "order_id": conv.order_id,
                     "messages": json.loads(conv.messages),
                     "current_step": conv.current_step,
                     "confirmed_items": json.loads(conv.confirmed_items),
-                    "issues_found": json.loads(conv.issues_found)
+                    "issues_found": json.loads(conv.issues_found),
+                    "pending_address": pending_address
                 }
         return None
 
@@ -86,14 +96,25 @@ class SQLiteDatabase(DatabaseInterface):
                 conv.current_step = conversation["current_step"]
                 conv.confirmed_items = json.dumps(conversation.get("confirmed_items", []))
                 conv.issues_found = json.dumps(conversation.get("issues_found", []))
+                # Persist pending_address in notes as JSON
+                notes_data = {}
+                try:
+                    if conv.notes:
+                        notes_data = json.loads(conv.notes)
+                except Exception:
+                    notes_data = {}
+                notes_data["pending_address"] = conversation.get("pending_address")
+                conv.notes = json.dumps(notes_data)
             else:
                 # Create new
+                notes_data = {"pending_address": conversation.get("pending_address")}
                 new_conv = ConversationModel(
                     order_id=order_id,
                     messages=json.dumps(conversation["messages"]),
                     current_step=conversation["current_step"],
                     confirmed_items=json.dumps(conversation.get("confirmed_items", [])),
-                    issues_found=json.dumps(conversation.get("issues_found", []))
+                    issues_found=json.dumps(conversation.get("issues_found", [])),
+                    notes=json.dumps(notes_data)
                 )
                 session.add(new_conv)
             await session.commit()
