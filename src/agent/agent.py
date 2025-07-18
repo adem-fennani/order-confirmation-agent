@@ -393,6 +393,22 @@ Exemples :
             # Only apply modification if not already pending
             if data.get("action") in {"modify", "replace", "remove", "add"} and data.get("modification"):
                 applied_successfully = await self._apply_llm_modification(order_id, order, data["modification"], data["action"], conversation, user_input)
+                # --- Inform user if fewer items were removed than requested ---
+                if data.get("action") == "remove":
+                    norm = self._normalize_modification(data["modification"], data["action"])
+                    actually_removed = None
+                    if "actually_removed" in norm:
+                        actually_removed = norm["actually_removed"]
+                    # Try to get from the last applied norm if not present
+                    if not actually_removed and "actually_removed" in data["modification"]:
+                        actually_removed = data["modification"]["actually_removed"]
+                    requested = norm.get("old_qty", 1)
+                    removed = actually_removed
+                    if removed is not None and removed < requested:
+                        if language.startswith("en"):
+                            data["message"] = (data["message"] + f" Note: Only {removed} {norm['old_item']}(s) were removed because that was all that remained in your order.")
+                        else:
+                            data["message"] = (data["message"] + f" Note : Seulement {removed} {norm['old_item']}(s) ont été supprimé(s) car c'est tout ce qui restait dans votre commande.")
                 if not applied_successfully:
                     if language.startswith("en"):
                         data["message"] = "I'm sorry, I didn't understand that. Could you please clarify your request?"
@@ -541,22 +557,31 @@ Exemples :
             norm["old_item"] = mod.get("item_id_to_remove") or mod.get("article_id_to_remove")
             norm["old_qty"] = mod.get("quantity", 1)
             return norm
-        # 8. old_item/new_item (handle 'replace' with quantity)
-        if (
-            mod.get("old_item") is not None and (mod.get("new_item") is not None or mod.get("item") is not None)
-            and mod.get("old_item") != None and (mod.get("new_item") != None or mod.get("item") != None)
-        ):
-            norm["action"] = "replace"
-            norm["old_item"] = mod["old_item"]
-            norm["new_item"] = mod.get("new_item") or mod.get("item")
-            # If 'quantity' is present, treat as: remove old_item (1 or specified), add new_item with that quantity
-            if "quantity" in mod and mod["quantity"]:
-                norm["old_qty"] = 1
-                norm["new_qty"] = mod["quantity"]
+        # 8. old_item/new_item or old_item/item (handle 'replace' or 'remove')
+        if mod.get("old_item") is not None and (mod.get("new_item") is not None or mod.get("item") is not None):
+            if mod.get("action") == "remove" or (
+                mod.get("action") is None and (
+                    (mod.get("new_item") is None or mod.get("new_item") == mod.get("old_item")) or
+                    (mod.get("item") is not None and mod.get("item") == mod.get("old_item"))
+                )
+            ):
+                # Treat as remove
+                norm["action"] = "remove"
+                norm["old_item"] = mod["old_item"]
+                norm["old_qty"] = mod.get("quantity", 1)
+                return norm
             else:
-                norm["old_qty"] = 1
-                norm["new_qty"] = 1
-            return norm
+                # Treat as replace
+                norm["action"] = "replace"
+                norm["old_item"] = mod["old_item"]
+                norm["new_item"] = mod.get("new_item") or mod.get("item")
+                if "quantity" in mod and mod["quantity"]:
+                    norm["old_qty"] = 1
+                    norm["new_qty"] = mod["quantity"]
+                else:
+                    norm["old_qty"] = 1
+                    norm["new_qty"] = 1
+                return norm
         # 7. item/article_id_to_add
         if "item" in mod or "article_id_to_add" in mod:
             norm["action"] = "add"
@@ -592,10 +617,19 @@ Exemples :
             if existing:
                 existing.quantity += norm["new_qty"]
             else:
+                # Try to infer price from any item with the same name (case-insensitive)
+                price = 0
+                for item in order.items:
+                    if item.name.lower() == norm["new_item"].lower():
+                        price = item.price
+                        break
+                # If not found, try to use the price of the last item as a fallback
+                if price == 0 and order.items:
+                    price = order.items[-1].price
                 order.items.append(OrderItem(
                     name=norm["new_item"],
                     quantity=norm["new_qty"],
-                    price=0,
+                    price=price,
                     notes='Ajouté via LLM (replace)'))
             applied = True
         elif norm["action"] == "add" and norm["new_item"]:
@@ -603,21 +637,34 @@ Exemples :
             if existing:
                 existing.quantity += norm["new_qty"]
             else:
+                # Try to infer price from any item with the same name (case-insensitive)
+                price = 0
+                for item in order.items:
+                    if item.name.lower() == norm["new_item"].lower():
+                        price = item.price
+                        break
+                # If not found, try to use the price of the last item as a fallback
+                if price == 0 and order.items:
+                    price = order.items[-1].price
                 order.items.append(OrderItem(
                     name=norm["new_item"],
                     quantity=norm["new_qty"],
-                    price=0,
+                    price=price,
                     notes='Ajouté via LLM (add)'))
             applied = True
         elif norm["action"] == "remove" and norm["old_item"]:
-            for _ in range(norm["old_qty"]):
-                for item in order.items:
-                    if item.name.lower() == norm["old_item"].lower():
-                        item.quantity -= 1
-                        if item.quantity <= 0:
-                            order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
-                        break
+            removed_count = 0
+            for item in order.items:
+                if item.name.lower() == norm["old_item"].lower():
+                    to_remove = min(norm["old_qty"], item.quantity)
+                    removed_count = to_remove
+                    item.quantity -= to_remove
+                    if item.quantity <= 0:
+                        order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
+                    break
             applied = True
+            # Store removed_count in the object for later use in the confirmation message if needed
+            norm["actually_removed"] = removed_count
         elif norm["action"] == "modify" and norm["old_item"] and norm["new_item"] and norm["new_qty"] is not None:
             # Set the quantity of the item directly
             for item in order.items:
