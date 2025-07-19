@@ -329,8 +329,9 @@ Le client a dit : "{user_input}"
 RÈGLE IMPORTANTE POUR L'ADRESSE DE LIVRAISON :
 - N'utilisez JAMAIS l'action "confirm" sauf si le client a déjà fourni et confirmé son adresse de livraison
 - Si le client confirme les détails de sa commande mais n'a pas encore fourni d'adresse de livraison, utilisez l'action "none" et demandez son adresse de livraison
-- Seulement après avoir collecté et confirmé l'adresse de livraison devez-vous utiliser l'action "confirm"
+- Une fois que le client a fourni une adresse ET confirmé cette adresse (en disant "oui", "correct", "exact", etc.), utilisez alors l'action "confirm" pour finaliser la commande
 - La collecte de l'adresse de livraison est OBLIGATOIRE avant la confirmation finale
+- IMPORTANT: Évitez les apostrophes dans vos messages JSON (utilisez "est" au lieu de "cest", "ne" au lieu de "nest", etc.)
 
 Répondez strictement avec un JSON dans le format suivant :
 {{
