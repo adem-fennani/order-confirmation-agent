@@ -96,7 +96,7 @@ class OrderConfirmationAgent:
                     return address_prompt
                 # If already in confirming_address and address is pending, fall through to address confirmation logic below
 
-
+            # Handle address confirmation step
             if conversation and getattr(conversation, 'current_step', None) == "confirming_address":
                 address = user_input.strip()
                 lang = self._detect_language(user_input)
@@ -141,6 +141,19 @@ class OrderConfirmationAgent:
                 conversation.messages.append({"role": "assistant", "content": confirm_prompt})
                 await self.db.update_conversation(order_id, conversation.dict())
                 return confirm_prompt
+
+            # Don't fall through to LLM if we're in confirming_address step
+            if conversation and conversation.current_step == "confirming_address":
+                # If we reach here, it means the address confirmation logic above didn't handle the input
+                # This shouldn't happen, but as a safety net, prompt for address again
+                lang = self._detect_language(user_input)
+                if lang.startswith("en"):
+                    fallback_prompt = "Could you please provide your delivery address?"
+                else:
+                    fallback_prompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
+                conversation.messages.append({"role": "assistant", "content": fallback_prompt})
+                await self.db.update_conversation(order_id, conversation.dict())
+                return fallback_prompt
 
             llm_response = await self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
@@ -227,7 +240,13 @@ You are a professional and friendly order confirmation agent. Here is the order 
 Conversation history:
 {conversation_history}
 
-The client said: \"{user_input}\"
+The client said: "{user_input}"
+
+IMPORTANT DELIVERY ADDRESS RULE:
+- NEVER use action "confirm" unless the customer has already provided and confirmed their delivery address
+- If the customer confirms their order details but hasn't provided a delivery address yet, use action "none" and ask for their delivery address
+- Only after collecting and confirming the delivery address should you use action "confirm"
+- The delivery address collection is MANDATORY before final confirmation
 
 Reply strictly with a JSON in the following format:
 {{
@@ -299,15 +318,21 @@ Examples:
             prompt = f"""
 {language_instruction}
 
-Vous êtes un agent professionnel et sympathique de confirmation de commande. Voici le contexte de la commande :
+Vous êtes un agent de confirmation de commande professionnel et amical. Voici le contexte de la commande :
 {order_context}
 
-Historique de conversation :
+Historique de la conversation :
 {conversation_history}
 
-Le client a dit : \"{user_input}\"
+Le client a dit : "{user_input}"
 
-Réponds strictement avec un JSON au format suivant :
+RÈGLE IMPORTANTE POUR L'ADRESSE DE LIVRAISON :
+- N'utilisez JAMAIS l'action "confirm" sauf si le client a déjà fourni et confirmé son adresse de livraison
+- Si le client confirme les détails de sa commande mais n'a pas encore fourni d'adresse de livraison, utilisez l'action "none" et demandez son adresse de livraison
+- Seulement après avoir collecté et confirmé l'adresse de livraison devez-vous utiliser l'action "confirm"
+- La collecte de l'adresse de livraison est OBLIGATOIRE avant la confirmation finale
+
+Répondez strictement avec un JSON dans le format suivant :
 {{
   "message": "...",  // Ce que l'agent doit dire au client
   "action": "confirm|modify|cancel|add|remove|replace|none",  // L'action à effectuer (utilise 'none' si aucune action n'est requise)
