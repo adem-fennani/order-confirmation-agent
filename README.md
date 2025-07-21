@@ -1,59 +1,59 @@
-# Agent Vocal de Confirmation de Commande
+# Order Confirmation Voice Agent
 
-## Description du projet
+## Project Description
 
-Ce projet vise à créer un prototype d’agent vocal capable de :
+This project aims to create a voice agent prototype capable of:
 
-- Recevoir une commande client (depuis WhatsApp ou un formulaire web).
-- Contacter ou répondre au client pour confirmer les détails de la commande.
-- Reformuler la commande, poser des questions de validation.
-- Confirmer la commande et mettre à jour une base de données simulée.
+- Receiving customer orders (from WhatsApp or a web form).
+- Contacting or responding to the customer to confirm order details.
+- Reformulating the order, asking validation questions.
+- Confirming the order and updating a simulated database.
 
-L’objectif est de simuler un assistant vocal intelligent qui interagit avec les clients afin d’assurer la bonne prise en compte de leurs commandes.
-
----
-
-## Fonctionnalités principales
-
-- **Réception des commandes** : via messages WhatsApp ou formulaire web.
-- **Analyse intelligente** : LangChain pour reformuler, questionner et valider la commande.
-- **Interface d’échange** : via Twilio (en production) ou en mode local (micro/casque).
-- **Base de données** : stockage des commandes confirmées dans une base de données SQLite.
-- **Interaction** : confirmation de commande par appel vocal ou chat.
+The objective is to simulate an intelligent voice assistant that interacts with customers to ensure proper handling of their orders.
 
 ---
 
-## Technologies & outils utilisés
+## Main Features
 
-| Fonction         | Technologie / Outil          |
+- **Order Reception**: via WhatsApp messages or web form.
+- **Intelligent Analysis**: LangChain to reformulate, question, and validate the order.
+- **Exchange Interface**: via Twilio (in production) or local mode (microphone/headset).
+- **Database**: storage of confirmed orders in an SQLite database.
+- **Interaction**: order confirmation via voice call or chat.
+
+---
+
+## Technologies & Tools Used
+
+| Function         | Technology / Tool            |
 | ---------------- | ---------------------------- |
-| Interface vocale | Twilio Voice ou local        |
+| Voice Interface  | Twilio Voice or local        |
 | Backend API      | Python + FastAPI             |
-| Agent IA         | LangChain (prompt + mémoire) |
+| AI Agent         | LangChain (prompt + memory)  |
 | LLM              | Google Generative AI         |
-| Base de données  | SQLite                       |
-| Interface Web    | HTML, CSS, JavaScript        |
+| Database         | SQLite                       |
+| Web Interface    | HTML, CSS, JavaScript        |
 
 ---
 
-## Installation et configuration
+## Installation and Configuration
 
-### Prérequis
+### Prerequisites
 
 - Python 3.11+
 - pip
-- (Optionnel) Compte Twilio avec numéro vocal configuré
+- (Optional) Twilio account with configured voice number
 
-### Étapes d’installation
+### Installation Steps
 
-1. Cloner le dépôt :
+1. Clone the repository:
 
    ```bash
    git clone https://github.com/adem-fennani/order-confirmation-agent.git
    cd order-confirmation-agent
    ```
 
-2. Créer un environnement virtuel Python :
+2. Create a Python virtual environment:
 
    ```bash
    python -m venv venv
@@ -61,13 +61,13 @@ L’objectif est de simuler un assistant vocal intelligent qui interagit avec le
    venv\Scripts\activate      # Windows
    ```
 
-3. Installer les dépendances :
+3. Install dependencies:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Configurer les variables d’environnement (exemple `.env`) :
+4. Configure environment variables (example `.env`):
 
    ```
    TWILIO_ACCOUNT_SID=xxxxxxx
@@ -77,9 +77,9 @@ L’objectif est de simuler un assistant vocal intelligent qui interagit avec le
 
 ---
 
-## Utilisation
+## Usage
 
-### Lancer le serveur backend
+### Launch the backend server
 
 ```bash
 uvicorn main:app --reload
@@ -103,56 +103,56 @@ The application exposes the following API endpoints:
 
 ---
 
-## Structure du projet
+## Project Structure
 
 ```
 .
 ├───src/
-│   ├───main.py             # Point d'entrée de l'application FastAPI
-│   ├───agent/              # Logique de l'agent de confirmation de commande
-│   │   ├───agent.py        # Implémentation de l'agent (LangChain, LLM)
-│   │   ├───models.py       # Modèles de données (Pydantic)
-│   │   └───database/       # Gestion de la base de données
-│   │       ├───sqlite.py   # Implémentation SQLite
-│   │       └───models.py   # Modèles SQLAlchemy
-│   ├───api/                # Définition des routes API
-│   │   ├───routes.py       # Routes FastAPI
-│   │   ├───schemas.py      # Schémas de validation (Pydantic)
-│   │   └───dependencies.py # Dépendances FastAPI (DB, Agent)
-│   ├───services/           # Services externes (LLM, TTS, STT)
-│   │   └───ai_service.py   # Intégration avec les modèles d'IA
-│   └───web/                # Fichiers statiques pour l'interface web
-│       ├───index.html      # Interface utilisateur
-│       ├───script.js       # Logique JavaScript du frontend
-│       └───style.css       # Styles CSS
-├───tests/                  # Tests unitaires et d'intégration
-├───config/                 # Fichiers de configuration
-├───docs/                   # Documentation additionnelle
-├───requirements.txt        # Dépendances Python
-├───README.md               # Ce fichier
-└───.env                    # Fichier d'environnement
+│   ├───main.py             # FastAPI application entry point
+│   ├───agent/              # Order confirmation agent logic
+│   │   ├───agent.py        # Agent implementation (LangChain, LLM)
+│   │   ├───models.py       # Data models (Pydantic)
+│   │   └───database/       # Database management
+│   │       ├───sqlite.py   # SQLite implementation
+│   │       └───models.py   # SQLAlchemy models
+│   ├───api/                # API routes definition
+│   │   ├───routes.py       # FastAPI routes
+│   │   ├───schemas.py      # Validation schemas (Pydantic)
+│   │   └───dependencies.py # FastAPI dependencies (DB, Agent)
+│   ├───services/           # External services (LLM, TTS, STT)
+│   │   └───ai_service.py   # AI models integration
+│   └───web/                # Static files for web interface
+│       ├───index.html      # User interface
+│       ├───script.js       # Frontend JavaScript logic
+│       └───style.css       # CSS styles
+├───tests/                  # Unit and integration tests
+├───config/                 # Configuration files
+├───docs/                   # Additional documentation
+├───requirements.txt        # Python dependencies
+├───README.md               # This file
+└───.env                    # Environment file
 ```
 
 ---
 
-## Contribution
+## Contributing
 
-Les contributions sont les bienvenues ! Veuillez suivre les étapes suivantes :
+Contributions are welcome! Please follow these steps:
 
-1.  Fork le dépôt.
-2.  Créez une nouvelle branche (`git checkout -b feature/nouvelle-fonctionnalite`).
-3.  Effectuez vos modifications et commitez-les (`git commit -am 'feat: ajouter une nouvelle fonctionnalité'`).
-4.  Poussez la branche (`git push origin feature/nouvelle-fonctionnalite`).
-5.  Créez une Pull Request.
+1.  Fork the repository.
+2.  Create a new branch (`git checkout -b feature/new-feature`).
+3.  Make your changes and commit them (`git commit -am 'feat: add new feature'`).
+4.  Push the branch (`git push origin feature/new-feature`).
+5.  Create a Pull Request.
 
 ---
 
-## Licence
+## License
 
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+This project is licensed under the MIT License. See the `LICENSE` file for more details.
 
 ---
 
 ## Contact
 
-Pour toute question ou suggestion, veuillez contacter [Adem Fennani](mailto:ademfennani7@gmail.com).
+For any questions or suggestions, please contact [Adem Fennani](mailto:ademfennani7@gmail.com).
