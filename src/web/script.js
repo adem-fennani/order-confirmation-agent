@@ -16,6 +16,20 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     setupAddOrderForm();
 
+    // Twilio test button handler
+    const testBtn = document.getElementById('twilio-test-btn');
+    if (testBtn) {
+        testBtn.addEventListener('click', async () => {
+            try {
+                const resp = await fetch(`${API_BASE}/test-sms`, { method: 'POST' });
+                if (!resp.ok) throw new Error('API error');
+                showSuccess('SMS envoyé !');
+            } catch (err) {
+                showError('Erreur envoi SMS');
+            }
+        });
+    }
+
     // Prevent accidental form submission in chat input area
     document.querySelectorAll('.chat-input input, .chat-input button').forEach(el => {
         el.addEventListener('keydown', function(e) {

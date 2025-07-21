@@ -9,6 +9,8 @@ from datetime import datetime
 import json
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
+from src.services.twilio_service import send_sms
+import os
 
 router = APIRouter()
 
@@ -153,3 +155,16 @@ async def reset_conversation(order_id: str, db=Depends(get_db), agent=Depends(ge
         return jsonable_encoder(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la réinitialisation: {str(e)}") 
+
+# --- Test SMS endpoint ---
+@router.post("/test-sms", include_in_schema=False)
+async def send_test_sms():
+    """Send a test SMS to the number specified in VERIFIED_TEST_NUMBER env var."""
+    to_number = os.getenv("VERIFIED_TEST_NUMBER")
+    if not to_number:
+        raise HTTPException(status_code=400, detail="VERIFIED_TEST_NUMBER env var not set")
+    try:
+        send_sms(to=to_number, body="Hi there! This is a Twilio test")
+        return {"status": "sent"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

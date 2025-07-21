@@ -1055,4 +1055,4 @@ Status: {order.status}
                     else:
                         item_strs.append(f"{item.quantity}x {item.name} ({item.price:.1f}€ chacun)")
                 total = sum(item.price * item.quantity for item in items)
-                return f"Vous avez commandé {', '.join(item_strs)} pour un total de {total:.1f}€." 
+                return f"Vous avez commandé {', '.join(item_strs)} pour un total de {total:.1f}€."  

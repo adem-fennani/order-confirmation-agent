@@ -8,3 +8,4 @@ langdetect
 httpx
 aiosqlite
 google-generativeai 
+twilio 
