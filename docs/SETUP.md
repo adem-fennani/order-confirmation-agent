@@ -9,66 +9,72 @@ Ce prototype d'agent vocal/textuel permet de :
 - Reformuler et valider les commandes
 - Mettre à jour le statut des commandes
 
-## 🚀 Installation et Configuration
+## 🚀 Installation and Configuration
 
-### Prérequis
+### Prerequisites
 
-- Python 3.8+
-- Node.js (optionnel, pour des extensions futures)
+- Python 3.11+
+- A Twilio account with a configured phone number capable of sending and receiving SMS.
+- An `ngrok` account to expose your local server to the internet for Twilio webhooks.
 
 ### Installation
 
-1. **Cloner le projet et créer un environnement virtuel**
+1.  **Clone the repository and create a virtual environment**
 
-```bash
-mkdir order-confirmation-agent
-cd order-confirmation-agent
-python -m venv venv
-source venv/bin/activate  # Sur Windows: venv\Scripts\activate
-```
+    ```bash
+    git clone https://github.com/adem-fennani/order-confirmation-agent.git
+    cd order-confirmation-agent
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    ```
 
-2. **Installer les dépendances**
+2.  **Install dependencies**
 
-```bash
-pip install fastapi uvicorn langchain-core pydantic python-multipart
-```
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-3. **Créer les fichiers du projet**
+3.  **Configure Environment Variables**
 
-- Copier le code Python dans `main.py`
-- Copier le code HTML dans `index.html`
+    Create a file named `.env` in the root of the project and add your credentials. You can use the `.env.example` file as a template.
 
-4. **Lancer le serveur**
+    ```
+    # Twilio Credentials
+    TWILIO_ACCOUNT_SID="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    TWILIO_AUTH_TOKEN="your_auth_token"
+    TWILIO_PHONE_NUMBER="+15017122661"
 
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+    # Phone number for testing, must be verified in your Twilio account
+    VERIFIED_TEST_NUMBER="+1234567890"
 
-5. **Ouvrir l'interface web**
+    # Google API Key for the AI service
+    GOOGLE_API_KEY="AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ```
 
-- Ouvrir `index.html` dans un navigateur
-- Ou accéder à `http://localhost:8000/docs` pour l'API Swagger
+4.  **Run the Backend Server**
 
-## 🔧 Structure du Projet
+    ```bash
+    uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+    ```
 
-```
-order-confirmation-agent/
-├── main.py                 # Backend FastAPI avec l'agent
-├── index.html             # Interface web de test
-├── requirements.txt       # Dépendances Python
-├── README.md             # Ce fichier
-└── venv/                 # Environnement virtuel
-```
+5.  **Expose Your Server with Ngrok**
 
-## 📝 Fichier requirements.txt
+    In a new terminal, run ngrok to create a public URL for your local server.
 
-```txt
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-langchain-core==0.1.12
-pydantic==2.5.0
-python-multipart==0.0.6
-```
+    ```bash
+    ngrok http 8000
+    ```
+
+6.  **Configure Twilio Webhook**
+
+    - Go to your Twilio phone number's configuration page.
+    - Under "Messaging", find the "A MESSAGE COMES IN" section.
+    - Set the webhook to the `https/` URL provided by ngrok, followed by `/sms-webhook`. For example: `https://<your-ngrok-subdomain>.ngrok.io/sms-webhook`
+    - Make sure the method is set to `HTTP POST`.
+
+7.  **Open the Web Interface**
+
+    Open the `src/web/index.html` file in your browser to interact with the application.
 
 ## 🎯 Utilisation
 

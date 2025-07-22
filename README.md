@@ -25,14 +25,46 @@ The objective is to simulate an intelligent voice assistant that interacts with 
 
 ## Technologies & Tools Used
 
-| Function         | Technology / Tool            |
-| ---------------- | ---------------------------- |
-| Voice Interface  | Twilio Voice or local        |
-| Backend API      | Python + FastAPI             |
-| AI Agent         | LangChain (prompt + memory)  |
-| LLM              | Google Generative AI         |
-| Database         | SQLite                       |
-| Web Interface    | HTML, CSS, JavaScript        |
+| Function        | Technology / Tool           |
+| --------------- | --------------------------- |
+| Voice Interface | Twilio Voice or local       |
+| Backend API     | Python + FastAPI            |
+| AI Agent        | LangChain (prompt + memory) |
+| LLM             | Google Generative AI        |
+| Database        | SQLite                      |
+| Web Interface   | HTML, CSS, JavaScript       |
+
+---
+
+## Project Structure
+
+```
+order-confirmation-agent/
+├── .env                  # Environment variables (Twilio keys, etc.)
+├── docs/
+│   ├── MANUAL_TEST_CASES.md
+│   └── SETUP.md
+├── src/
+│   ├── main.py             # FastAPI application entry point
+│   ├── agent/              # Core agent logic
+│   │   ├── agent.py
+│   │   ├── models.py
+│   │   └── database/
+│   ├── api/                # FastAPI endpoints and schemas
+│   │   ├── dependencies.py
+│   │   ├── routes.py
+│   │   └── schemas.py
+│   ├── services/           # External services (Twilio, AI)
+│   │   ├── ai_service.py
+│   │   └── twilio_service.py
+│   └── web/                # Frontend files
+│       ├── index.html
+│       ├── script.js
+│       └── style.css
+├── tests/
+├── requirements.txt
+└── README.md
+```
 
 ---
 
@@ -98,6 +130,8 @@ The application exposes the following API endpoints:
 - `POST /orders/{order_id}/message`: Send a message to the agent for a specific order, triggering a response.
 - `GET /orders/{order_id}/conversation`: Retrieve the conversation history for a specific order.
 - `DELETE /orders/{order_id}`: Delete an order.
+- `POST /sms-webhook`: Handle incoming SMS messages from Twilio.
+- `POST /test-sms`: Send a test SMS to a verified number.
 - `PUT /orders/{order_id}`: Update an existing order.
 - `POST /orders/{order_id}/reset`: Reset the conversation for a specific order.
 
@@ -106,31 +140,41 @@ The application exposes the following API endpoints:
 ## Project Structure
 
 ```
-.
-├───src/
-│   ├───main.py             # FastAPI application entry point
-│   ├───agent/              # Order confirmation agent logic
-│   │   ├───agent.py        # Agent implementation (LangChain, LLM)
-│   │   ├───models.py       # Data models (Pydantic)
-│   │   └───database/       # Database management
-│   │       ├───sqlite.py   # SQLite implementation
-│   │       └───models.py   # SQLAlchemy models
-│   ├───api/                # API routes definition
-│   │   ├───routes.py       # FastAPI routes
-│   │   ├───schemas.py      # Validation schemas (Pydantic)
-│   │   └───dependencies.py # FastAPI dependencies (DB, Agent)
-│   ├───services/           # External services (LLM, TTS, STT)
-│   │   └───ai_service.py   # AI models integration
-│   └───web/                # Static files for web interface
-│       ├───index.html      # User interface
-│       ├───script.js       # Frontend JavaScript logic
-│       └───style.css       # CSS styles
-├───tests/                  # Unit and integration tests
-├───config/                 # Configuration files
-├───docs/                   # Additional documentation
-├───requirements.txt        # Python dependencies
-├───README.md               # This file
-└───.env                    # Environment file
+order-confirmation-agent/
+├── .env                  # Environment variables (Twilio keys, etc.)
+├── docs/
+│   ├── MANUAL_TEST_CASES.md
+│   └── SETUP.md
+├── src/
+│   ├── __init__.py
+│   ├── main.py             # FastAPI application entry point
+│   ├── agent/
+│   │   ├── __init__.py
+│   │   ├── agent.py        # Core agent logic for processing conversations
+│   │   ├── models.py       # Pydantic models for orders, conversations, etc.
+│   │   └── database/
+│   │       ├── __init__.py
+│   │       ├── base.py     # Abstract database interface
+│   │       ├── models.py   # SQLAlchemy ORM models
+│   │       └── sqlite.py   # SQLite database implementation
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── dependencies.py # FastAPI dependencies (e.g., get_db)
+│   │   ├── routes.py       # All API endpoints, including the SMS webhook
+│   │   └── schemas.py      # Pydantic schemas for API request/response validation
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── ai_service.py   # Service for calling the language model
+│   │   └── twilio_service.py # Service for sending SMS via Twilio
+│   └── web/
+│       ├── index.html      # Frontend for viewing orders and conversations
+│       ├── script.js       # Frontend JavaScript logic
+│       ├── style.css       # Frontend styles
+│       └── assets/
+├── tests/
+├── requirements.txt
+├── README.md
+└── ... (other config files)
 ```
 
 ---
