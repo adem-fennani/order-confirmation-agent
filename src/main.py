@@ -23,7 +23,11 @@ async def root():
 # CORS: allow frontend served from same origin (localhost:8000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=[
+        "http://localhost:8000", 
+        "http://127.0.0.1:8000",
+        "https://a67163b76042.ngrok-free.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

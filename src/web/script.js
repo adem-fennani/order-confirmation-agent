@@ -166,9 +166,7 @@ function displayOrders(orders) {
                     Démarrer conversation
                 </button>
                 <div style="display:flex;gap:8px;">
-                    <button class="reset-conversation-btn order-action-btn" type="button" data-order-id="${order.id}" title="Réinitialiser">
-                        <span>🔄</span>
-                    </button>
+
                     <button class="update-order-btn order-action-btn" type="button" data-order-id="${order.id}" title="Mettre à jour">
                         <span>✏️</span>
                     </button>
@@ -188,7 +186,7 @@ function displayOrders(orders) {
                 e.target.classList.contains('start-confirmation') ||
                 e.target.classList.contains('delete-order-btn') ||
                 e.target.classList.contains('update-order-btn') ||
-                e.target.classList.contains('reset-conversation-btn') ||
+
                 e.target.closest('button')
             ) {
                 e.preventDefault();
@@ -297,59 +295,7 @@ function displayOrders(orders) {
         });
     });
 
-    // In the reset button click handler:
-    document.querySelectorAll('.reset-conversation-btn').forEach(btn => {
-        btn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const orderId = this.dataset.orderId;
-            if (confirm('Voulez-vous vraiment réinitialiser cette conversation ?')) {
-                try {
-                    isLoading = true;
-                    btn.disabled = true;
-                    
-                    // Clear the chat UI immediately
-                    if (currentOrderId === orderId) {
-                        chatMessages.innerHTML = '<div class="loading">Réinitialisation...</div>';
-                    }
-                    
-                    const resp = await fetch(`${API_BASE}/orders/${orderId}/reset`, { 
-                        method: 'POST' 
-                    });
-                    
-                    if (!resp.ok) {
-                        const error = await resp.json();
-                        throw new Error(error.detail || 'Erreur API');
-                    }
-                    
-                    const data = await resp.json();
-                    
-                    // If this is the currently selected order, update the chat
-                    if (currentOrderId === orderId) {
-                        chatMessages.innerHTML = '';
-                        addMessage(data.user_message, 'user');
-                        addMessage(data.agent_response, 'agent');
-                        
-                        // Update status visually to "en attente"
-                        const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
-                        if (orderCard) {
-                            const statusElement = orderCard.querySelector('.order-status');
-                            statusElement.textContent = "en attente";
-                            statusElement.className = "order-status status-pending";
-                        }
-                    }
-                    
-                    showSuccess('Conversation réinitialisée avec succès');
-                } catch (err) {
-                    console.error('Reset error:', err);
-                    showError(err.message || 'Erreur lors de la réinitialisation');
-                } finally {
-                    isLoading = false;
-                    btn.disabled = false;
-                }
-            }
-        });
-    });
+
 }
 
 async function sendMessageAutomatically(message) {
@@ -429,7 +375,8 @@ async function startConfirmation(orderId) {
         
         selectOrder(orderId);
         
-        // Add agent's initial message
+        // Clear chat and add agent's initial message
+        chatMessages.innerHTML = '';
         addMessage(data.message, 'agent');
         
     } catch (error) {

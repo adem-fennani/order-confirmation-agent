@@ -436,22 +436,3 @@ body {
 .order-action-btn.delete-order-btn:hover {
     background: #c53030;
 }
-
-.reset-conversation-btn {
-    background: #a0aec0;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 5px 10px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background 0.2s;
-}
-
-.reset-conversation-btn:hover {
-    background: #718096;
-}
-
-.reset-conversation-btn span {
-    font-size: 16px;
-}
