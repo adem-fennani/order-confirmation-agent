@@ -37,3 +37,7 @@ class ConversationState(BaseModel):
     last_modification: Optional[tuple] = None
     pending_address: Optional[str] = None  # Persist delivery address being confirmed
     last_active: datetime = Field(default_factory=datetime.utcnow)
+
+class Message(BaseModel):
+    role: str  # 'user' or 'agent'
+    content: str

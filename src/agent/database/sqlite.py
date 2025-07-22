@@ -62,6 +62,34 @@ class SQLiteDatabase(DatabaseInterface):
                 return True
         return False
 
+    async def get_order_by_phone(self, phone_number: str) -> Optional[Dict]:
+        """Get the most recent active order for a given phone number."""
+        async with self.Session() as session:
+            result = await session.execute(select(OrderModel).filter(
+                OrderModel.customer_phone == phone_number,
+                OrderModel.status == 'pending'
+            ).order_by(OrderModel.id.desc()))
+            order = result.scalars().first()
+            if order:
+                items = order.items
+                if isinstance(items, str):
+                    try:
+                        items = json.loads(items)
+                    except Exception:
+                        items = []
+                return {
+                    "id": order.id,
+                    "customer_name": order.customer_name,
+                    "customer_phone": order.customer_phone,
+                    "items": items,
+                    "total_amount": order.total_amount,
+                    "status": order.status,
+                    "created_at": order.created_at.isoformat(),
+                    "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
+                    "notes": order.notes
+                }
+        return None
+
     async def get_conversation(self, order_id: str) -> Optional[Dict]:
         async with self.Session() as session:
             result = await session.execute(select(ConversationModel).filter_by(order_id=order_id))

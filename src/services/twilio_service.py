@@ -1,17 +1,54 @@
-from twilio.rest import Client
 import os
+from dotenv import load_dotenv
 
-_client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
-_FROM = os.getenv("TWILIO_PHONE_NUMBER")
+# Dynamically import the real Twilio client only if needed
+try:
+    from twilio.rest import Client
+    TWILIO_SDK_AVAILABLE = True
+except ImportError:
+    TWILIO_SDK_AVAILABLE = False
 
+load_dotenv()
 
-def send_sms(to: str, body: str) -> None:
-    """Send a simple SMS message via Twilio.
+# Check if we should use the mock service
+USE_MOCK = os.getenv('USE_MOCK_SMS', 'false').lower() == 'true'
 
-    Args:
-        to (str): Recipient phone number in E.164 format.
-        body (str): SMS body text.
+# Initialize real client only if not using mock and SDK is available
+client = None
+if not USE_MOCK and TWILIO_SDK_AVAILABLE:
+    account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
+    auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
+    if account_sid and auth_token:
+        client = Client(account_sid, auth_token)
+    else:
+        print("WARNING: Twilio credentials not found. Real SMS sending will fail.")
+
+def send_sms(to_number: str, message: str):
     """
-    if not _FROM:
-        raise RuntimeError("TWILIO_PHONE_NUMBER env var not set")
-    _client.messages.create(to=to, from_=_FROM, body=body)
+    Sends an SMS using either the real Twilio client or a mock service.
+    
+    The behavior is controlled by the USE_MOCK_SMS environment variable.
+    - If USE_MOCK_SMS is 'true', it uses the mock service.
+    - Otherwise, it uses the real Twilio service.
+    """
+    
+    # Proceed with the real Twilio service
+    if not client or not TWILIO_SDK_AVAILABLE:
+        error_msg = "Twilio SDK not installed or client not configured. Cannot send real SMS."
+        print(f"ERROR: {error_msg}")
+        raise RuntimeError(error_msg)
+        
+    twilio_phone_number = os.environ['TWILIO_PHONE_NUMBER']
+    
+    try:
+        message = client.messages.create(
+            body=message,
+            from_=twilio_phone_number,
+            to=to_number
+        )
+        print(f"Successfully sent SMS via Twilio. SID: {message.sid}")
+        return {"sid": message.sid}
+    except Exception as e:
+        print(f"ERROR: Failed to send SMS via Twilio: {e}")
+        # Propagate the error to be handled by the API route
+        raise e

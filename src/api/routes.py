@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
-from typing import List, Optional
-from src.agent.models import OrderItem, Order, ConversationState
+from fastapi import APIRouter, HTTPException, Body, Depends, Form, Response
+from typing import List, Optional, Dict
+from src.agent.models import OrderItem, Order, ConversationState, Message
 from src.agent.database.models import OrderModel
 from src.api.schemas import CreateOrder
 from src.api.dependencies import get_db, get_agent
+from src.agent.database.base import DatabaseInterface
+from src.agent.agent import OrderConfirmationAgent as Agent
 import uuid
 from datetime import datetime
 import json
@@ -68,8 +70,25 @@ async def get_order(order_id: str, db=Depends(get_db)):
         }
 
 @router.post("/orders/{order_id}/confirm")
-async def start_confirmation(order_id: str, db=Depends(get_db), agent=Depends(get_agent)):
+async def start_confirmation(order_id: str, db: DatabaseInterface = Depends(get_db), agent: Agent = Depends(get_agent)):
+    # Get the customer's phone number from the order
+    order = await db.get_order(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    customer_phone = order.get("customer_phone")
+
+    # Start the conversation with the agent to get the initial message
     initial_response = await agent.start_conversation(order_id, language="fr")
+
+    # Send the initial message via SMS
+    try:
+        send_sms(to_number=customer_phone, message=initial_response)
+    except Exception as e:
+        # If SMS fails, we should still proceed to show the conversation in the UI,
+        # but log the error.
+        print(f"ERROR: Failed to send initial confirmation SMS to {customer_phone}: {e}")
+
+    # Return the response to the frontend
     return {
         "order_id": order_id,
         "message": initial_response,
@@ -164,7 +183,43 @@ async def send_test_sms():
     if not to_number:
         raise HTTPException(status_code=400, detail="VERIFIED_TEST_NUMBER env var not set")
     try:
-        send_sms(to=to_number, body="Hi there! This is a Twilio test")
+        send_sms(to_number=to_number, message="Test")
         return {"status": "sent"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/sms-webhook")
+async def sms_webhook(
+    From: str = Form(...),
+    Body: str = Form(...),
+    db: DatabaseInterface = Depends(get_db),
+    agent: Agent = Depends(get_agent)
+):
+    """Handle incoming SMS messages from Twilio."""
+    customer_phone = From
+    incoming_msg_text = Body
+
+    # 1. Find the order associated with the phone number
+    order = await db.get_order_by_phone(customer_phone)
+
+    if not order:
+        # If no pending order, we can't do anything.
+        # In a real app, you might send a generic "Sorry, I can't find your order" message.
+        print(f"No pending order found for phone number: {customer_phone}")
+        # Twilio requires a response, even if empty. A 204 No Content is appropriate.
+        return Response(status_code=204)
+
+    # 2. Pass the message to the agent and get a response
+    order_id = order['id']
+    agent_response = await agent.get_response(order_id, incoming_msg_text)
+
+    # 3. Send the agent's response back to the customer
+    try:
+        send_sms(to_number=customer_phone, message=agent_response)
+    except Exception as e:
+        print(f"Failed to send reply SMS to {customer_phone}: {e}")
+        # Even if sending fails, we can't raise an HTTP exception here
+        # because Twilio will see it as a webhook failure.
+
+    # 4. Return a success response to Twilio
+    return Response(status_code=204)
