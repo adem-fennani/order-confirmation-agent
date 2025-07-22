@@ -211,7 +211,7 @@ async def sms_webhook(
 
     # 2. Pass the message to the agent and get a response
     order_id = order['id']
-    agent_response = await agent.get_response(order_id, incoming_msg_text)
+    agent_response = await agent.process_message(order_id, incoming_msg_text)
 
     # 3. Send the agent's response back to the customer
     try:
