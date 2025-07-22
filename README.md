@@ -1,4 +1,4 @@
-# Order Confirmation Voice Agent
+# Order Confirmation Agent
 
 ## Project Description
 
