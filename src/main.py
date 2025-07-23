@@ -26,7 +26,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8000", 
         "http://127.0.0.1:8000",
-        "https://a67163b76042.ngrok-free.app"
+        "https://94475c721c33.ngrok-free.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],

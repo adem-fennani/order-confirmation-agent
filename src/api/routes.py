@@ -12,6 +12,7 @@ import json
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from src.services.twilio_service import send_sms
+from twilio.twiml.messaging_response import MessagingResponse
 import os
 
 router = APIRouter()
@@ -70,25 +71,35 @@ async def get_order(order_id: str, db=Depends(get_db)):
         }
 
 @router.post("/orders/{order_id}/confirm")
-async def start_confirmation(order_id: str, db: DatabaseInterface = Depends(get_db), agent: Agent = Depends(get_agent)):
-    # Get the customer's phone number from the order
+async def start_confirmation(
+    order_id: str,
+    payload: dict = Body(...),
+    db: DatabaseInterface = Depends(get_db),
+    agent: Agent = Depends(get_agent)
+):
+    """Starts a confirmation conversation in either 'web' or 'sms' mode."""
+    mode = payload.get("mode", "web")
+
+    # Get the order details
     order = await db.get_order(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    customer_phone = order.get("customer_phone")
 
     # Start the conversation with the agent to get the initial message
     initial_response = await agent.start_conversation(order_id, language="fr")
 
-    # Send the initial message via SMS
-    try:
-        send_sms(to_number=customer_phone, message=initial_response)
-    except Exception as e:
-        # If SMS fails, we should still proceed to show the conversation in the UI,
-        # but log the error.
-        print(f"ERROR: Failed to send initial confirmation SMS to {customer_phone}: {e}")
+    # If in SMS mode, send the initial message via SMS
+    if mode == "sms":
+        customer_phone = order.get("customer_phone")
+        if not customer_phone:
+            raise HTTPException(status_code=400, detail="Customer phone number is missing for SMS mode.")
+        try:
+            send_sms(to_number=customer_phone, message=initial_response)
+        except Exception as e:
+            # If SMS fails, we should still proceed, but log the error.
+            print(f"ERROR: Failed to send initial confirmation SMS to {customer_phone}: {e}")
 
-    # Return the response to the frontend
+    # Return the response to the frontend for both modes
     return {
         "order_id": order_id,
         "message": initial_response,
@@ -195,31 +206,27 @@ async def sms_webhook(
     db: DatabaseInterface = Depends(get_db),
     agent: Agent = Depends(get_agent)
 ):
-    """Handle incoming SMS messages from Twilio."""
+    """Handle incoming SMS messages from Twilio and reply with TwiML."""
     customer_phone = From
     incoming_msg_text = Body
 
-    # 1. Find the order associated with the phone number
+    # Find the most recent pending order for the customer's phone number
     order = await db.get_order_by_phone(customer_phone)
 
-    if not order:
-        # If no pending order, we can't do anything.
-        # In a real app, you might send a generic "Sorry, I can't find your order" message.
-        print(f"No pending order found for phone number: {customer_phone}")
-        # Twilio requires a response, even if empty. A 204 No Content is appropriate.
-        return Response(status_code=204)
+    # Prepare a TwiML response
+    twiml_response = MessagingResponse()
 
-    # 2. Pass the message to the agent and get a response
-    order_id = order['id']
-    agent_response = await agent.process_message(order_id, incoming_msg_text)
+    if not order or order.get("status") != "pending":
+        # If no pending order is found, log it and send a polite generic message.
+        print(f"Webhook received from {customer_phone} but no pending order found.")
+        twiml_response.message("Désolé, je ne trouve aucune commande en attente de confirmation pour ce numéro.")
+    else:
+        # If a pending order is found, process the message with the agent
+        order_id = order['id']
+        agent_response = await agent.process_message(order_id, incoming_msg_text)
+        
+        # Add the agent's reply to the TwiML response
+        twiml_response.message(agent_response)
 
-    # 3. Send the agent's response back to the customer
-    try:
-        send_sms(to_number=customer_phone, message=agent_response)
-    except Exception as e:
-        print(f"Failed to send reply SMS to {customer_phone}: {e}")
-        # Even if sending fails, we can't raise an HTTP exception here
-        # because Twilio will see it as a webhook failure.
-
-    # 4. Return a success response to Twilio
-    return Response(status_code=204)
+    # Return the TwiML response to Twilio
+    return Response(content=str(twiml_response), media_type="application/xml")

@@ -1,6 +1,7 @@
 const API_BASE = 'http://localhost:8000';
 let currentOrderId = null;
 let isLoading = false;
+let currentMode = 'web'; // 'web' or 'sms'
 
 // DOM elements
 const ordersList = document.getElementById('orders-list');
@@ -14,6 +15,7 @@ const errorMessage = document.getElementById('error-message');
 document.addEventListener('DOMContentLoaded', function() {
     loadOrders();
     setupEventListeners();
+    setupModeSelector();
     setupAddOrderForm();
 
     // Twilio test button handler
@@ -51,6 +53,23 @@ function setupEventListeners() {
     sendButton.addEventListener('click', function(e) {
         e.preventDefault();
         sendMessage();
+    });
+}
+
+function setupModeSelector() {
+    const modeWebBtn = document.getElementById('mode-web');
+    const modeSmsBtn = document.getElementById('mode-sms');
+
+    modeWebBtn.addEventListener('click', () => {
+        currentMode = 'web';
+        modeWebBtn.classList.add('active');
+        modeSmsBtn.classList.remove('active');
+    });
+
+    modeSmsBtn.addEventListener('click', () => {
+        currentMode = 'sms';
+        modeSmsBtn.classList.add('active');
+        modeWebBtn.classList.remove('active');
     });
 }
 
@@ -367,10 +386,20 @@ async function startConfirmation(orderId) {
     try {
         isLoading = true;
         sendButton.disabled = true;
-        
+        messageInput.disabled = true;
+
+        // Send the selected mode to the backend
         const response = await fetch(`${API_BASE}/orders/${orderId}/confirm`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: currentMode })
         });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || 'Failed to start confirmation');
+        }
+
         const data = await response.json();
         
         selectOrder(orderId);
@@ -378,13 +407,28 @@ async function startConfirmation(orderId) {
         // Clear chat and add agent's initial message
         chatMessages.innerHTML = '';
         addMessage(data.message, 'agent');
+
+        if (currentMode === 'sms') {
+            // In SMS mode, keep input disabled and show a note
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            addMessage("La conversation a commencé par SMS. Veuillez consulter votre téléphone pour continuer.", "system");
+        } else {
+            // In Web mode, enable input
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+        }
         
     } catch (error) {
         console.error('Error starting confirmation:', error);
-        showError('Erreur lors du démarrage de la confirmation');
+        showError(`Erreur: ${error.message}`);
     } finally {
         isLoading = false;
-        sendButton.disabled = false;
+        // Re-enable buttons only if in web mode and an order is selected
+        if (currentMode === 'web' && currentOrderId) {
+             messageInput.disabled = false;
+             sendButton.disabled = false;
+        }
     }
 }
 
@@ -420,15 +464,16 @@ function displayConversation(messages) {
 }
 
 function addMessage(text, sender) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}`;
-    messageDiv.innerHTML = `
-        <div class="message-bubble">
-            ${text}
-        </div>
-    `;
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message', `${sender}-message`);
     
-    chatMessages.appendChild(messageDiv);
+    // Add a specific class for system messages for styling
+    if (sender === 'system') {
+        messageElement.classList.add('system-message');
+    }
+
+    messageElement.textContent = text;
+    chatMessages.appendChild(messageElement);
     scrollToBottom();
 }
 
