@@ -5,64 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2024-06-XX
-
-### Changed
-
-- Updated README for accuracy and clarity, reflecting actual project structure and features.
-
-### Known Issues
-
-- SMS messages may sometimes be flagged by the carrier as 'Short code', making it impossible for recipients to reply to the SMS.
-
-## [0.1.0] - 2025-01-19
+## [0.2.0] - 2025-07-23
 
 ### Added
 
-- Initial development release of the Order Confirmation Agent prototype
-- FastAPI backend with comprehensive REST API
-- LLM-powered conversation agent with multilingual support (French/English)
-- SQLite database for order and conversation storage
-- Web interface for order management and testing
-- Address confirmation workflow
-- Order modification capabilities (add, remove, replace items)
-- Language detection and response generation
-- Conversation state management
-- Comprehensive error handling and fallback mechanisms
+- **SMS Integration**: The agent can now send and receive order confirmation messages via SMS using Twilio.
+- **Web / SMS Mode**: Users can choose to confirm orders via the web interface or through SMS, making the system more flexible and accessible.
+- **Twilio Messaging Service Support**: Integration with Twilio’s Messaging Service for reliable SMS delivery and webhook handling.
 
 ### Features
 
-- **Order Management**: Create, read, update, delete orders
-- **Conversation Agent**: Intelligent order confirmation with LLM
-- **Multilingual Support**: French and English language detection and responses
-- **Address Collection**: Mandatory delivery address confirmation workflow
-- **Order Modifications**: Add, remove, replace items during confirmation
-- **Web Interface**: User-friendly interface for testing and management
-- **API Endpoints**: Complete REST API for integration
+- **Order Confirmation via SMS**: Customers can interact with the agent directly from their phones.
+- **Dual Mode Support**: Seamless switching between web chat and SMS for order confirmation.
+- **All previous features**: Order management, LLM-powered conversation, multilingual support, address collection, order modifications, and REST API endpoints remain available.
 
 ### Technical Details
 
-- Built with FastAPI and Python 3.11+
-- Uses Google Generative AI for LLM capabilities
-- SQLite database with SQLAlchemy ORM
-- Pydantic models for data validation
-- Comprehensive test suite
-- Production-ready error handling
+- Twilio Messaging Service integration for SMS sending and receiving.
+- Backend logic to handle both web and SMS confirmation flows.
+- Environment variable support for Twilio configuration.
 
 ### Fixed
 
-- Duplicate address confirmation prompts
-- LLM interference with address collection workflow
-- Null reference issues in conversation handling
-- Type safety improvements
+- Improved error handling for SMS delivery failures.
+- Minor bug fixes to support SMS workflows.
 
 ### Known Issues
 
-- Still in development/prototype phase
-- Not ready for production deployment
-- Limited error handling for edge cases
-- No authentication/authorization system
-- No rate limiting or security hardening
+- **Carrier Short Code Flagging**: SMS messages may sometimes be flagged by the carrier as 'Short code', making it impossible for recipients to reply to the SMS.
+- Still in development/prototype phase.
+- Limited error handling for edge cases.
+- No authentication/authorization system.
 
 ### Security
 
