@@ -497,8 +497,6 @@ async function sendMessage() {
         isLoading = true;
         sendButton.disabled = true;
         
-        // Add user message to UI
-        addMessage(text, 'user');
         messageInput.value = '';
         
         // Send to API
@@ -510,18 +508,16 @@ async function sendMessage() {
             body: JSON.stringify({ text })
         });
         
-        const data = await response.json();
-        
-        // Add agent response
-        addMessage(data.agent_response, 'agent');
+        // After sending, reload the conversation from backend
+        await loadConversation(currentOrderId);
         
         // Refresh orders if conversation reached final confirmation
+        const data = await response.json();
         if (data.agent_response.includes("confirmée") || 
             data.agent_response.includes("annulée")) {
             // Small delay for better UX
             setTimeout(() => {
                 loadOrders();
-                
                 // Update current order card status visually
                 const orderCard = document.querySelector(`[data-order-id="${currentOrderId}"]`);
                 if (orderCard) {

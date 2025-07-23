@@ -29,6 +29,8 @@ class OrderConfirmationAgent:
             conversation_data = await self.db.get_conversation(order_id)
             conversation = ConversationState(**conversation_data) if conversation_data else None
             user_input_lower = user_input.strip().lower()
+            # --- Remove unconditional user message append here to avoid duplicates ---
+            # user_confirms, last_assistant_message, etc. remain unchanged
             user_confirms = any(word in user_input_lower for word in ["yes", "oui", "ok", "correct", "d'accord"])
             last_assistant_message = None
             if conversation and conversation.messages:
@@ -78,13 +80,14 @@ class OrderConfirmationAgent:
                     else:
                         confirmation_message = f"Votre commande contient maintenant : {items_str}. Le total est de {total}€. Est-ce correct ?"
                     if conversation:
+                        conversation.messages.append({"role": "user", "content": user_input})
                         conversation.messages.append({"role": "assistant", "content": confirmation_message})
                         await self.db.update_conversation(order_id, conversation.dict())
                     return confirmation_message
             if awaiting_confirmation and user_confirms:
                 lang = self._detect_language(user_input)
-                # Only transition if not already in confirming_address and no pending_address
                 if conversation and not (conversation.current_step == "confirming_address" and getattr(conversation, 'pending_address', None)):
+                    conversation.messages.append({"role": "user", "content": user_input})
                     conversation.current_step = "confirming_address"
                     conversation.pending_address = None
                     if lang.startswith("en"):
@@ -94,15 +97,12 @@ class OrderConfirmationAgent:
                     conversation.messages.append({"role": "assistant", "content": address_prompt})
                     await self.db.update_conversation(order_id, conversation.dict())
                     return address_prompt
-                # If already in confirming_address and address is pending, fall through to address confirmation logic below
-
-            # Handle address confirmation step
             if conversation and getattr(conversation, 'current_step', None) == "confirming_address":
                 address = user_input.strip()
                 lang = self._detect_language(user_input)
-                # If user confirms and pending_address exists, finalize
                 if address.lower() in ["oui", "yes", "ok", "d'accord", "correct"]:
                     if conversation.pending_address:
+                        conversation.messages.append({"role": "user", "content": user_input})
                         await self.db.update_order(order_id, {"delivery_address": conversation.pending_address, "status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()})
                         if lang.startswith("en"):
                             final_message = "Thank you! Your address is confirmed and your order is now being prepared."
@@ -114,16 +114,16 @@ class OrderConfirmationAgent:
                         await self.db.update_conversation(order_id, conversation.dict())
                         return final_message
                     else:
-                        # No pending address, reprompt
                         if lang.startswith("en"):
                             reprompt = "Could you please provide your delivery address?"
                         else:
                             reprompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
+                        conversation.messages.append({"role": "user", "content": user_input})
                         conversation.messages.append({"role": "assistant", "content": reprompt})
                         await self.db.update_conversation(order_id, conversation.dict())
                         return reprompt
-                # If user says no, clear pending address and reprompt
                 if address.lower() in ["non", "no", "incorrect", "erreur"]:
+                    conversation.messages.append({"role": "user", "content": user_input})
                     conversation.pending_address = None
                     if lang.startswith("en"):
                         reprompt = "Sorry, could you please provide your correct delivery address?"
@@ -132,8 +132,8 @@ class OrderConfirmationAgent:
                     conversation.messages.append({"role": "assistant", "content": reprompt})
                     await self.db.update_conversation(order_id, conversation.dict())
                     return reprompt
-                # Otherwise, treat input as address and ask for confirmation
                 conversation.pending_address = address
+                conversation.messages.append({"role": "user", "content": user_input})
                 if lang.startswith("en"):
                     confirm_prompt = f"Just to confirm, is this your delivery address: '{address}'? (yes/no)"
                 else:
@@ -141,20 +141,17 @@ class OrderConfirmationAgent:
                 conversation.messages.append({"role": "assistant", "content": confirm_prompt})
                 await self.db.update_conversation(order_id, conversation.dict())
                 return confirm_prompt
-
-            # Don't fall through to LLM if we're in confirming_address step
             if conversation and conversation.current_step == "confirming_address":
-                # If we reach here, it means the address confirmation logic above didn't handle the input
-                # This shouldn't happen, but as a safety net, prompt for address again
                 lang = self._detect_language(user_input)
                 if lang.startswith("en"):
                     fallback_prompt = "Could you please provide your delivery address?"
                 else:
                     fallback_prompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
+                conversation.messages.append({"role": "user", "content": user_input})
                 conversation.messages.append({"role": "assistant", "content": fallback_prompt})
                 await self.db.update_conversation(order_id, conversation.dict())
                 return fallback_prompt
-
+            # For LLM path, let llm_process_message handle appending the user message
             llm_response = await self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
                 return llm_response

@@ -38,16 +38,32 @@ def send_sms(to_number: str, message: str):
         print(f"ERROR: {error_msg}")
         raise RuntimeError(error_msg)
         
-    twilio_phone_number = os.environ['TWILIO_PHONE_NUMBER']
-    
+    messaging_service_sid = os.getenv('TWILIO_MESSAGING_SERVICE_SID')
+    twilio_phone_number = os.getenv('TWILIO_PHONE_NUMBER')
+
+    if not messaging_service_sid and not twilio_phone_number:
+        raise ValueError("Either TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER must be set in .env")
+
+    # Prepare arguments for the Twilio client
+    create_args = {
+        'body': message,
+        'to': to_number
+    }
+
+    # Use Messaging Service SID if available, otherwise use the 'from' number
+    if messaging_service_sid:
+        create_args['messaging_service_sid'] = messaging_service_sid
+        sender_info = f"Messaging Service SID: {messaging_service_sid}"
+    else:
+        if not twilio_phone_number:
+            raise ValueError("TWILIO_PHONE_NUMBER must be set in .env if no Messaging Service SID is provided")
+        create_args['from_'] = twilio_phone_number
+        sender_info = f"From Number: {twilio_phone_number}"
+
     try:
-        message = client.messages.create(
-            body=message,
-            from_=twilio_phone_number,
-            to=to_number
-        )
-        print(f"Successfully sent SMS via Twilio. SID: {message.sid}")
-        return {"sid": message.sid}
+        twilio_message = client.messages.create(**create_args)
+        print(f"Successfully sent SMS via Twilio using {sender_info}. SID: {twilio_message.sid}")
+        return {"sid": twilio_message.sid}
     except Exception as e:
         print(f"ERROR: Failed to send SMS via Twilio: {e}")
         # Propagate the error to be handled by the API route

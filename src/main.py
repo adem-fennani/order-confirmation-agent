@@ -8,6 +8,15 @@ import os
 
 app = FastAPI(title="Order Confirmation Agent API", version="1.0.0")
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+);
+
 @app.on_event("startup")
 async def startup_event():
     await create_db_tables()
@@ -26,7 +35,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8000", 
         "http://127.0.0.1:8000",
-        "https://94475c721c33.ngrok-free.app"
+        "https://504ed128997d.ngrok-free.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
