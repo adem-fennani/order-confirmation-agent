@@ -465,14 +465,24 @@ function displayConversation(messages) {
 
 function addMessage(text, sender) {
     const messageElement = document.createElement('div');
-    messageElement.classList.add('message', `${sender}-message`);
-    
-    // Add a specific class for system messages for styling
+    // The container for the message gets a class for alignment ('user' or 'agent')
+    messageElement.className = `message ${sender}`;
+
     if (sender === 'system') {
-        messageElement.classList.add('system-message');
+        // System messages have their own styling and don't need a bubble
+        const systemDiv = document.createElement('div');
+        systemDiv.className = 'system-message';
+        systemDiv.textContent = text;
+        messageElement.appendChild(systemDiv);
+    } else {
+        // Agent and user messages get the bubble treatment
+        const bubble = document.createElement('div');
+        // The bubble gets a generic class and a sender-specific one for color
+        bubble.className = `message-bubble ${sender}-message`;
+        bubble.textContent = text;
+        messageElement.appendChild(bubble);
     }
 
-    messageElement.textContent = text;
     chatMessages.appendChild(messageElement);
     scrollToBottom();
 }
