@@ -6,8 +6,13 @@ db = SQLiteDatabase()
 agent = OrderConfirmationAgent(db)
 
 async def create_db_tables():
-    async with db.engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with db.engine.begin() as conn:   
+            await conn.run_sync(Base.metadata.create_all)
+        return True
+    except Exception as e:
+        print(f"[WARNING] Database initialization failed: {e}")
+        return False
 
 def get_db():
     return db

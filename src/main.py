@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from src.api.routes import router
+from src.api.routes import router as api_router
+from src.api.facebook_routes import router as facebook_router
 from src.api.dependencies import create_db_tables
 import os
 
@@ -19,7 +20,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    await create_db_tables()
+    try:
+        db_initialized = await create_db_tables()
+        if not db_initialized:
+            print("[WARNING] Database initialization failed, but continuing startup...")
+    except Exception as e:
+        print(f"[WARNING] Error during startup: {e}")
+        print("[INFO] Continuing startup without database...")
 
 # Serve static files from the 'src/web' directory at /static
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "web"), html=True), name="static")
@@ -35,14 +42,25 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8000", 
         "http://127.0.0.1:8000",
-        "https://e17d97379e42.ngrok-free.app"
+        "https://0b452b707797.ngrok-free.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(router)
+from src.api.routes import router as api_router
+from src.api.facebook_routes import router as facebook_router
+
+# Mount API routes
+app.include_router(api_router)
+# Mount Facebook routes at /api/v1/facebook
+app.include_router(facebook_router, prefix="/api/v1/facebook", tags=["facebook"])
+
+# Debug route to verify webhook URL is accessible
+@app.get("/api/v1/facebook/webhook/test")
+async def test_webhook():
+    return {"status": "webhook endpoint is accessible"}
 
 if __name__ == "__main__":
     import uvicorn

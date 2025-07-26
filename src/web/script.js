@@ -32,6 +32,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Facebook test button handler
+    const fbTestBtn = document.getElementById('facebook-test-btn');
+    if (fbTestBtn) {
+        fbTestBtn.addEventListener('click', async () => {
+            const recipientId = prompt("Please enter your Facebook Page-Scoped User ID (PSID):");
+            if (!recipientId) return;
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/v1/facebook/send-test-message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recipient_id: recipientId, message: 'This is a test message.' })
+                });
+                if (!resp.ok) {
+                    const errData = await resp.json();
+                    throw new Error(errData.detail || 'API error');
+                }
+                showSuccess('Message Messenger envoyé !');
+            } catch (err) {
+                showError(`Erreur envoi Messenger: ${err.message}`);
+            }
+        });
+    }
+
     // Prevent accidental form submission in chat input area
     document.querySelectorAll('.chat-input input, .chat-input button').forEach(el => {
         el.addEventListener('keydown', function(e) {

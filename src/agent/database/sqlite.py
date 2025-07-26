@@ -9,7 +9,7 @@ from .base import DatabaseInterface
 from sqlalchemy import select, delete
 
 class SQLiteDatabase(DatabaseInterface):
-    def __init__(self, db_url="sqlite+aiosqlite:///orders.db"):
+    def __init__(self, db_url="sqlite+aiosqlite:///orders.db?check_same_thread=False"):
         self.engine = create_async_engine(db_url)
         self.Session = sessionmaker(
             bind=self.engine,
