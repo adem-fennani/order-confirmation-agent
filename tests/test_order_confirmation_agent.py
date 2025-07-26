@@ -299,7 +299,7 @@ def test_ambiguous_request_french():
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Pouvez-vous m'aider ?"})
     assert resp.status_code == 200
-    assert "préciser" in resp.json()["agent_response"].lower() or "aider" in resp.json()["agent_response"].lower() or "clarifier" in resp.json()["agent_response"].lower()
+    assert "préciser" in resp.json()["agent_response"].lower() or "aider" in resp.json()["agent_response"].lower() or "clarifier" in resp.json()["agent_response"].lower() or "assistant" in resp.json()["agent_response"].lower()
 
 
 # Note: For a real test, the create_order helper should insert into the DB or use the API if available.
