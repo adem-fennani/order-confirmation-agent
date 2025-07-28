@@ -100,8 +100,11 @@ async def facebook_webhook(request: Request):
             
             if parsed_message:
                 sender_id = parsed_message["sender_id"]
-                message_text = parsed_message["message_text"]
-                logger.info(f"Received message from {sender_id}: {message_text}")
+                message_text = parsed_message.get("message_text")
+                if message_text:
+                    logger.info(f"Received message from {sender_id}: {message_text}")
+                else:
+                    logger.info(f"Received event from {sender_id} with no message text.")
                 
                 # Send immediate acknowledgment
                 try:

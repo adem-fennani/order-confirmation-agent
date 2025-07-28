@@ -73,12 +73,20 @@ class FacebookService:
         if webhook_payload.get("object") == "page":
             for entry in webhook_payload.get("entry", []):
                 for messaging_event in entry.get("messaging", []):
+                    logger.info(f"Processing messaging event: {messaging_event}")
+                    sender_id = messaging_event.get("sender", {}).get("id")
+                    if not sender_id:
+                        logger.warning("Could not find sender ID in messaging event.")
+                        continue
+
                     if "message" in messaging_event and "text" in messaging_event["message"]:
-                        sender_id = messaging_event["sender"]["id"]
                         message_text = messaging_event["message"]["text"]
                         logger.info(f"Parsed message from {sender_id}: {message_text}")
                         return {
                             "sender_id": sender_id,
                             "message_text": message_text,
                         }
+                    else:
+                        logger.warning("Received a messaging event that is not a standard text message.")
+                        return {"sender_id": sender_id, "message_text": None}
         return None
