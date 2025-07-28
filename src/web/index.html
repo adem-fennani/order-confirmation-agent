@@ -29,8 +29,10 @@
             <div class="sidebar">
                 <h3>Commandes en attente</h3>
                 <button id="show-add-order" class="start-confirmation alt-btn" style="margin-bottom:10px;">+ Nouvelle commande</button>
-                <button id="twilio-test-btn" class="start-confirmation alt-btn" style="margin-bottom:10px;background:#1976d2;color:#fff;">📱 Envoyer SMS test</button>
-                <button id="facebook-test-btn" class="start-confirmation alt-btn" style="margin-bottom:10px;background:#0d8bf1;color:#fff;">💬 Envoyer test Messenger</button>
+                <div class="test-buttons-container">
+                    <button id="twilio-test-btn" class="start-confirmation alt-btn">Test SMS</button>
+                    <button id="facebook-test-btn" class="start-confirmation alt-btn">Test Messenger</button>
+                </div>
                 <form id="add-order-form" style="display:none; margin-bottom:20px; background:#f4f6fb; padding:15px; border-radius:8px;">
                     <h4>Ajouter une commande</h4>
                     <input type="text" id="add-customer-name" placeholder="Nom du client" required style="width:100%;margin-bottom:8px;">
