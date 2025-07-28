@@ -121,23 +121,6 @@ async def facebook_webhook(request: Request):
         # Still return 200 OK to prevent Facebook from retrying
         return Response(status_code=200)
 
-    if parsed_message:
-        sender_id = parsed_message["sender_id"]
-        message_text = parsed_message["message_text"]
-
-        # Here you would need a way to link sender_id to an order_id.
-        # For now, let's assume you have a function to find the order by Facebook PSID.
-        # order = await db.get_order_by_facebook_psid(sender_id)
-        
-        # Since we don't have that function yet, we can't process the message with the agent.
-        # We will just log it for now.
-        logger.info(f"Message from {sender_id}: {message_text}")
-
-        # Example of sending a reply:
-        # await facebook_service.send_message(sender_id, "Message received!")
-
-    return Response(status_code=200)
-
 @router.get("/webhook/test")
 async def test_webhook():
     """

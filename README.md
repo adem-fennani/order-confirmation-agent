@@ -62,7 +62,7 @@ order-confirmation-agent/
 - pip
 - Twilio account with a Messaging Service (with phone number attached, SMS enabled)
 - Google Generative AI API key
-- (Optional) ngrok for local webhook testing
+- ngrok account and auth token
 
 ### Steps
 
@@ -86,18 +86,16 @@ order-confirmation-agent/
    TWILIO_MESSAGING_SERVICE_SID=... # Messaging Service SID (must have phone number, SMS enabled)
    VERIFIED_TEST_NUMBER=...         # For test SMS endpoint
    GOOGLE_API_KEY=...               # Google Generative AI API key
+   NGROK_AUTHTOKEN=...              # Your ngrok authtoken
    USE_MOCK_SMS=false               # (Optional) Set to 'true' to disable real SMS sending
    ```
 4. **Run the backend server**
    ```bash
    uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
    ```
-5. **(For SMS) Expose your local server with ngrok**
-   ```bash
-   ngrok http 8000
-   ```
-   - Set your Twilio Messaging Service webhook to `https://<ngrok-subdomain>.ngrok.io/sms-webhook`
-6. **Open the web interface**
+   When you run the application, it will automatically create an ngrok tunnel and print the public URL to the console. You will need to use this URL to configure your Twilio webhook.
+
+5. **Open the web interface**
    - Open `src/web/index.html` in your browser for the web chat UI.
 
 ---

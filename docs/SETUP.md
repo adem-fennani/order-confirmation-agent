@@ -15,7 +15,7 @@ Ce prototype d'agent vocal/textuel permet de :
 
 - Python 3.11+
 - A Twilio account with a configured phone number capable of sending and receiving SMS.
-- An `ngrok` account to expose your local server to the internet for Twilio webhooks.
+- An `ngrok` account and authtoken to expose your local server to the internet for Twilio webhooks.
 
 ### Installation
 
@@ -49,6 +49,9 @@ Ce prototype d'agent vocal/textuel permet de :
 
     # Google API Key for the AI service
     GOOGLE_API_KEY="AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+    # Ngrok Authtoken
+    NGROK_AUTHTOKEN="your_ngrok_authtoken"
     ```
 
 4.  **Run the Backend Server**
@@ -56,23 +59,16 @@ Ce prototype d'agent vocal/textuel permet de :
     ```bash
     uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
     ```
+    The application will automatically create an ngrok tunnel and print the public URL to the console. You will need to use this URL to configure your Twilio webhook.
 
-5.  **Expose Your Server with Ngrok**
-
-    In a new terminal, run ngrok to create a public URL for your local server.
-
-    ```bash
-    ngrok http 8000
-    ```
-
-6.  **Configure Twilio Webhook**
+5.  **Configure Twilio Webhook**
 
     - Go to your Twilio phone number's configuration page.
     - Under "Messaging", find the "A MESSAGE COMES IN" section.
     - Set the webhook to the `https/` URL provided by ngrok, followed by `/sms-webhook`. For example: `https://<your-ngrok-subdomain>.ngrok.io/sms-webhook`
     - Make sure the method is set to `HTTP POST`.
 
-7.  **Open the Web Interface**
+6.  **Open the Web Interface**
 
     Open the `src/web/index.html` file in your browser to interact with the application.
 
