@@ -83,17 +83,27 @@ function setupEventListeners() {
 function setupModeSelector() {
     const modeWebBtn = document.getElementById('mode-web');
     const modeSmsBtn = document.getElementById('mode-sms');
+    const modeMessengerBtn = document.getElementById('mode-messenger');
 
     modeWebBtn.addEventListener('click', () => {
         currentMode = 'web';
         modeWebBtn.classList.add('active');
         modeSmsBtn.classList.remove('active');
+        modeMessengerBtn.classList.remove('active');
     });
 
     modeSmsBtn.addEventListener('click', () => {
         currentMode = 'sms';
         modeSmsBtn.classList.add('active');
         modeWebBtn.classList.remove('active');
+        modeMessengerBtn.classList.remove('active');
+    });
+
+    modeMessengerBtn.addEventListener('click', () => {
+        currentMode = 'messenger';
+        modeMessengerBtn.classList.add('active');
+        modeWebBtn.classList.remove('active');
+        modeSmsBtn.classList.remove('active');
     });
 }
 
@@ -437,7 +447,13 @@ async function startConfirmation(orderId) {
             messageInput.disabled = true;
             sendButton.disabled = true;
             addMessage("La conversation a commencé par SMS. Veuillez consulter votre téléphone pour continuer.", "system");
-        } else {
+        } else if (currentMode === 'messenger') {
+            // In Messenger mode, keep input disabled and show a note
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            addMessage("La conversation a commencé sur Messenger. Veuillez consulter votre Messenger pour continuer.", "system");
+        }
+        else {
             // In Web mode, enable input
             messageInput.disabled = false;
             sendButton.disabled = false;

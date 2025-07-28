@@ -154,3 +154,29 @@ class SQLiteDatabase(DatabaseInterface):
             await session.execute(delete(ConversationModel).filter_by(order_id=order_id))
             await session.commit()
             return True
+
+    async def get_all_orders(self) -> list[Dict]:
+        """Get all orders from the database."""
+        async with self.Session() as session:
+            result = await session.execute(select(OrderModel))
+            db_orders = result.scalars().all()
+            orders = []
+            for order in db_orders:
+                items = order.items
+                if isinstance(items, str):
+                    try:
+                        items = json.loads(items)
+                    except Exception:
+                        items = []
+                orders.append({
+                    "id": order.id,
+                    "customer_name": order.customer_name,
+                    "customer_phone": order.customer_phone,
+                    "items": items,
+                    "total_amount": order.total_amount,
+                    "status": order.status,
+                    "created_at": order.created_at.isoformat(),
+                    "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
+                    "notes": order.notes
+                })
+            return orders

@@ -6,6 +6,7 @@ from src.services.facebook_service import FacebookService
 from src.agent.agent import OrderConfirmationAgent
 from src.api.dependencies import get_agent, get_db
 from src.agent.database.base import DatabaseInterface
+from src.agent.models import Order
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -101,19 +102,36 @@ async def facebook_webhook(request: Request):
             if parsed_message:
                 sender_id = parsed_message["sender_id"]
                 message_text = parsed_message.get("message_text")
-                if message_text:
-                    logger.info(f"Received message from {sender_id}: {message_text}")
-                else:
-                    logger.info(f"Received event from {sender_id} with no message text.")
                 
-                # Send immediate acknowledgment
-                try:
-                    await facebook_service.send_message(
-                        sender_id,
-                        "Message received! I'll process it shortly."
-                    )
-                except Exception as e:
-                    logger.error(f"Error sending acknowledgment: {e}")
+                # Hardcoded PSID for now
+                HARDCODED_PSID = "24195304350131271"
+
+                if sender_id == HARDCODED_PSID:
+                    logger.info(f"Received message from hardcoded PSID {sender_id}: {message_text}")
+                    
+                    # Get agent and db instances
+                    agent = get_agent()
+                    db = get_db()
+
+                    # Find the most recent pending order (temporary workaround for hardcoded PSID)
+                    # In a real scenario, you'd link PSID to an order in your DB
+                    orders = await db.get_all_orders() # Assuming a method to get all orders, or filter by status
+                    
+                    # Filter for pending orders and sort by creation date to get the most recent
+                    pending_orders = [o for o in orders if o.get("status") == "pending"]
+                    pending_orders.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+                    if pending_orders:
+                        order_id = pending_orders[0]["id"]
+                        logger.info(f"Processing message for order {order_id}")
+                        agent_response = await agent.process_message(order_id, message_text)
+                        await facebook_service.send_message(sender_id, agent_response)
+                    else:
+                        logger.warning(f"No pending order found for PSID {sender_id}. Cannot process message.")
+                        await facebook_service.send_message(sender_id, "Désolé, je n'ai pas de commande en attente pour vous. Veuillez démarrer une nouvelle conversation via l'interface web.")
+                else:
+                    logger.warning(f"Received message from unknown PSID: {sender_id}. Message: {message_text}")
+                    await facebook_service.send_message(sender_id, "Désolé, je ne peux pas traiter les messages de ce compte. Veuillez contacter l'administrateur.")
             
             # Always return 200 OK to acknowledge receipt
             return Response(status_code=200)

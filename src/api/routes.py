@@ -12,6 +12,7 @@ import json
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from src.services.twilio_service import send_sms
+from src.services.facebook_service import FacebookService
 from twilio.twiml.messaging_response import MessagingResponse
 import os
 
@@ -98,6 +99,14 @@ async def start_confirmation(
         except Exception as e:
             # If SMS fails, we should still proceed, but log the error.
             print(f"ERROR: Failed to send initial confirmation SMS to {customer_phone}: {e}")
+    elif mode == "messenger":
+        # Hardcoded PSID for now
+        PSID = "24195304350131271"
+        facebook_service = FacebookService()
+        try:
+            await facebook_service.send_message(recipient_id=PSID, message_text=initial_response)
+        except Exception as e:
+            print(f"ERROR: Failed to send initial confirmation Messenger message to {PSID}: {e}")
 
     # Return the response to the frontend for both modes
     return {
