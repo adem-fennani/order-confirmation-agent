@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # This must be a secret string you create and set in your Facebook App settings.
-VERIFY_TOKEN = os.environ.get("FACEBOOK_VERIFY_TOKEN", "YOUR_VERY_SECRET_TOKEN")
+VERIFY_TOKEN = os.environ.get("FACEBOOK_VERIFY_TOKEN")
 
 # Verify that required environment variables are set
 if not os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN"):

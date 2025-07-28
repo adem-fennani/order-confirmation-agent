@@ -9,4 +9,3 @@ httpx<0.24.0
 aiosqlite
 google-generativeai
 twilio
-pyngrok
