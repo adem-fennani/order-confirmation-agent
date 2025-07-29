@@ -2,6 +2,16 @@ import json
 from pydantic import BaseModel, validator, Field
 from typing import List, Optional, Dict
 from datetime import datetime
+from enum import Enum
+
+class AgentState(Enum):
+    GREETING = "greeting"
+    CONFIRMING_ITEMS = "confirming_items"
+    CONFIRMING_ADDRESS = "confirming_address"
+    CONFIRMING_DETAILS = "confirming_details"
+    FINAL_CONFIRMATION = "final_confirmation"
+    ORDER_CONFIRMED = "order_confirmed"
+    COMPLETED = "completed"
 
 class OrderItem(BaseModel):
     name: str

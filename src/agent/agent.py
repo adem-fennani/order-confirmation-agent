@@ -1,4 +1,4 @@
-from .models import Order, ConversationState, OrderItem
+from .models import Order, ConversationState, OrderItem, AgentState
 from .database.sqlite import SQLiteDatabase
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
@@ -105,14 +105,11 @@ class OrderConfirmationAgent:
                         conversation.messages.append({"role": "user", "content": user_input})
                         await self.db.update_order(order_id, {"delivery_address": conversation.pending_address, "status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()})
                         if lang.startswith("en"):
-                            final_message = "Thank you! Your address is confirmed and your order is now being prepared."
-                        else:
-                            final_message = "Merci ! Votre adresse est confirmée et votre commande est en préparation."
-                        conversation.messages.append({"role": "assistant", "content": final_message})
+                            response = "Thank you! Your address is confirmed and your order is now being prepared."
+                        self.current_state = AgentState.ORDER_CONFIRMED
                         conversation.current_step = "completed"
-                        conversation.pending_address = None
                         await self.db.update_conversation(order_id, conversation.dict())
-                        return final_message
+                        return response
                     else:
                         if lang.startswith("en"):
                             reprompt = "Could you please provide your delivery address?"
@@ -141,16 +138,7 @@ class OrderConfirmationAgent:
                 conversation.messages.append({"role": "assistant", "content": confirm_prompt})
                 await self.db.update_conversation(order_id, conversation.dict())
                 return confirm_prompt
-            if conversation and conversation.current_step == "confirming_address":
-                lang = self._detect_language(user_input)
-                if lang.startswith("en"):
-                    fallback_prompt = "Could you please provide your delivery address?"
-                else:
-                    fallback_prompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
-                conversation.messages.append({"role": "user", "content": user_input})
-                conversation.messages.append({"role": "assistant", "content": fallback_prompt})
-                await self.db.update_conversation(order_id, conversation.dict())
-                return fallback_prompt
+            
             # For LLM path, let llm_process_message handle appending the user message
             llm_response = await self.llm_process_message(order_id, user_input, language=language)
             if llm_response and isinstance(llm_response, str) and llm_response.strip():
@@ -189,13 +177,7 @@ class OrderConfirmationAgent:
         if conversation.current_step == "completed":
             return "Cette conversation est terminée. Merci!"
         
-        # Don't use LLM for address confirmation - let the rule-based logic handle it
-        if conversation.current_step == "confirming_address":
-            lang = self._detect_language(user_input)
-            if lang.startswith("en"):
-                return "Could you please provide your delivery address?"
-            else:
-                return "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
+        
         
         conversation.messages.append({"role": "user", "content": user_input})
         conversation.last_active = datetime.utcnow()
@@ -917,11 +899,11 @@ Status: {order.status}
                     await self.db.update_order(order_id, {"delivery_address": address})
                     conversation.delivery_address = address
                     conversation.pending_address = None
-                    conversation.current_step = "confirming_details"
+                    conversation.current_step = "completed"
                     if lang.startswith("en"):
-                        return ("Thank you! Now, could you confirm your name and any other delivery details?", conversation)
+                        return ("Thank you! Your address is confirmed and your order is now being prepared.", conversation)
                     else:
-                        return ("Merci ! Maintenant, pouvez-vous confirmer votre nom et d'autres détails de livraison ?", conversation)
+                        return ("Merci ! Votre adresse est confirmée et votre commande est maintenant en préparation.", conversation)
                 else:
                     # User said no, ask for address again
                     conversation.pending_address = None
