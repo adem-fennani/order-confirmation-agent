@@ -98,6 +98,7 @@ class OrderConfirmationAgent:
                     await self.db.update_conversation(order_id, conversation.dict())
                     return address_prompt
             if conversation and getattr(conversation, 'current_step', None) == "confirming_address":
+                print(f"[DEBUG] Entering confirming_address. pending_address: {conversation.pending_address}, current_step: {conversation.current_step}")
                 address = user_input.strip()
                 lang = self._detect_language(user_input)
                 if address.lower() in ["oui", "yes", "ok", "d'accord", "correct"]:
@@ -130,6 +131,7 @@ class OrderConfirmationAgent:
                     await self.db.update_conversation(order_id, conversation.dict())
                     return reprompt
                 conversation.pending_address = address
+                print(f"[DEBUG] pending_address set to: {conversation.pending_address}")
                 conversation.messages.append({"role": "user", "content": user_input})
                 if lang.startswith("en"):
                     confirm_prompt = f"Just to confirm, is this your delivery address: '{address}'? (yes/no)"
