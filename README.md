@@ -2,20 +2,29 @@
 
 ## Overview
 
-Order Confirmation Agent is a modern, AI-powered system for confirming customer orders via both web chat and SMS. It leverages FastAPI, Twilio, and Google Generative AI to provide a seamless, multilingual (French/English) conversational experience for order validation, modification, and confirmation.
+Order Confirmation Agent is a modern, AI-powered system for confirming customer orders. It features a browser extension to automatically detect purchases from e-commerce sites (like Facebook Marketplace) and initiates a confirmation flow via Facebook Messenger, web chat, or SMS. The system leverages FastAPI, a Chrome Extension, and Google Generative AI to provide a seamless, multilingual (French/English) conversational experience for order validation, modification, and final confirmation.
+
+---
+
+## Core Workflow
+
+1.  **Order Detection**: A browser extension, running on sites like Facebook Marketplace, automatically scrapes order details upon checkout completion.
+2.  **Order Creation**: The extension sends the scraped data to the backend API, which creates a new order in the database.
+3.  **Automated Confirmation**: Upon order creation, the agent automatically sends a confirmation message to the user via Facebook Messenger.
+4.  **Conversational Agent**: The user interacts with the AI agent on Messenger to confirm, modify, or cancel their order.
+5.  **Status Update**: The order status is updated in the database based on the conversation outcome.
 
 ---
 
 ## Features
 
-- **Conversational Order Confirmation**: Interact with customers to confirm, modify, or cancel orders.
-- **Web & SMS Support**: Customers can chat via a web interface or receive/respond to SMS (Twilio integration).
-- **AI-Powered Dialogues**: Uses Google Generative AI (via LangChain) for natural, context-aware conversations.
-- **Multilingual**: Detects and responds in French or English automatically.
-- **Order Management**: Create, view, and update orders with customer details, items, and status.
-- **Delivery Address Handling**: Ensures delivery address is collected and confirmed before finalizing orders.
-- **Persistent Storage**: Uses SQLite for storing orders and conversation history.
-- **Extensible & Modular**: Clean separation of agent logic, API, services, and database layers.
+- **Automated Order Detection**: A browser extension automatically captures order details from e-commerce confirmation pages.
+- **Facebook Messenger Integration**: Proactively sends order confirmation messages and handles the conversation on Messenger.
+- **AI-Powered Dialogues**: Uses Google Generative AI for natural, context-aware, multilingual (French/English) conversations.
+- **Multi-channel Support**: Also supports confirmation via a web interface and SMS (Twilio).
+- **Order Management**: A web UI to view, manage, and interact with all orders and conversations.
+- **Persistent Storage**: Uses a SQLite database to store all order and conversation data.
+- **Extensible & Modular**: Cleanly separates the agent logic, API, external services, and the browser extension.
 
 ---
 
@@ -23,33 +32,18 @@ Order Confirmation Agent is a modern, AI-powered system for confirming customer 
 
 ```
 order-confirmation-agent/
-├── .env                  # Environment variables (Twilio, Google API, etc.)
-├── docs/                 # Documentation and manual test cases
+├── .env                  # Environment variables
+├── docs/                 # Documentation
 ├── src/
 │   ├── main.py           # FastAPI app entry point
-│   ├── agent/            # Core agent logic (LLM, order, conversation)
-│   │   ├── agent.py
-│   │   ├── models.py
-│   │   └── database/
-│   │       ├── base.py
-│   │       ├── models.py
-│   │       └── sqlite.py
+│   ├── agent/            # Core agent logic
 │   ├── api/              # FastAPI endpoints and schemas
-│   │   ├── dependencies.py
-│   │   ├── routes.py
-│   │   └── schemas.py
-│   ├── services/         # External services (AI, Twilio)
-│   │   ├── ai_service.py
-│   │   └── twilio_service.py
-│   └── web/              # Frontend (HTML, JS, CSS, assets)
-│       ├── index.html
-│       ├── script.js
-│       ├── style.css
-│       └── assets/
+│   ├── extension/        # Browser extension source
+│   ├── services/         # External services (AI, Twilio, Facebook)
+│   └── web/              # Frontend for order management UI
 ├── tests/                # Test scripts
 ├── requirements.txt      # Python dependencies
-├── README.md
-└── ...
+└── README.md
 ```
 
 ---
@@ -59,108 +53,101 @@ order-confirmation-agent/
 ### Prerequisites
 
 - Python 3.11+
-- pip
-- Twilio account with a Messaging Service (with phone number attached, SMS enabled)
-- Google Generative AI API key
-- (Optional) ngrok for local webhook testing
+- A Chrome-based browser
+- A Facebook Page and a Facebook Developer App
+- `ngrok` for local webhook testing
 
 ### Steps
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/adem-fennani/order-confirmation-agent.git
-   cd order-confirmation-agent
-   ```
-2. **Create a virtual environment & install dependencies**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-3. **Configure environment variables**
-   Create a `.env` file in the root directory:
-   ```
-   TWILIO_ACCOUNT_SID=...           # Your Twilio Account SID
-   TWILIO_AUTH_TOKEN=...            # Your Twilio Auth Token
-   TWILIO_PHONE_NUMBER=...          # Your Twilio phone number (E.164 format)
-   TWILIO_MESSAGING_SERVICE_SID=... # Messaging Service SID (must have phone number, SMS enabled)
-   VERIFIED_TEST_NUMBER=...         # For test SMS endpoint
-   GOOGLE_API_KEY=...               # Google Generative AI API key
-   FACEBOOK_VERIFY_TOKEN=...        # Your Facebook App's verify token
-   FACEBOOK_PAGE_ACCESS_TOKEN=...   # Your Facebook Page's access token
-   USE_MOCK_SMS=false               # (Optional) Set to 'true' to disable real SMS sending
-   ```
-4. **Run the backend server**
-   ```bash
-   uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-5. **(For SMS) Expose your local server with ngrok**
-   ```bash
-   ngrok http 8000
-   ```
-   - Set your Twilio Messaging Service webhook to `https://<ngrok-subdomain>.ngrok.io/sms-webhook`
-6. **Open the web interface**
-   - Open `src/web/index.html` in your browser for the web chat UI.
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/adem-fennani/order-confirmation-agent.git
+    cd order-confirmation-agent
+    ```
+2.  **Create a virtual environment & install dependencies**
+    ```bash
+    python -m venv venv
+    source venv/bin/activate   # On Windows: venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+3.  **Configure environment variables**
+    Create a `.env` file in the root directory. See `docs/SETUP.md` for detailed instructions on getting Facebook credentials.
+
+    ```
+    # Google AI
+    GOOGLE_API_KEY=...
+
+    # Facebook Messenger
+    FACEBOOK_VERIFY_TOKEN=...        # A secret token of your choice
+    FACEBOOK_PAGE_ACCESS_TOKEN=...   # From your Facebook App
+    FACEBOOK_PSID=...                # The user's Page-Scoped ID to send messages to
+
+    # (Optional) Twilio for SMS
+    TWILIO_ACCOUNT_SID=...
+    TWILIO_AUTH_TOKEN=...
+    TWILIO_PHONE_NUMBER=...
+    ```
+
+4.  **Run the backend server**
+    ```bash
+    uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+    ```
+5.  **Load the Browser Extension**
+
+    - Open Chrome and navigate to `chrome://extensions`.
+    - Enable "Developer mode".
+    - Click "Load unpacked" and select the `src/extension` directory.
+    - Click the extension icon, go to "Settings", and enter your name and phone number.
+
+6.  **Configure Facebook Webhook**
+    - Run ngrok to expose your local server: `ngrok http 8000`
+    - In your Facebook App's Messenger settings, set the webhook URL to `https://<your-ngrok-subdomain>.ngrok.io/api/v1/facebook/webhook` and use the `FACEBOOK_VERIFY_TOKEN` you created.
 
 ---
 
 ## Usage
 
-- **Web Chat**: Use the web interface to view, create, and confirm orders interactively.
-- **SMS**: Customers can receive and reply to SMS for order confirmation. All SMS are handled via Twilio and the `/sms-webhook` endpoint.
-- **API**: Interact programmatically with the REST API (see endpoints below).
+1.  With the backend server running, navigate to a test order page (e.g., `http://localhost:8080/test_order.html` served locally).
+2.  The browser extension will automatically detect the order and send it to the backend.
+3.  The backend creates the order and immediately sends a confirmation message to the user specified by `FACEBOOK_PSID` in your `.env` file.
+4.  Open Facebook Messenger to interact with the agent and complete the confirmation.
+5.  Visit the web UI (`http://localhost:8000`) to see the order status update in real-time.
 
 ---
 
 ## API Endpoints (Summary)
 
-| Method | Endpoint                        | Description                              |
-| ------ | ------------------------------- | ---------------------------------------- |
-| GET    | /orders                         | List all orders                          |
-| POST   | /orders                         | Create a new order                       |
-| POST   | /orders/{order_id}/confirm      | Start confirmation (web or SMS)          |
-| POST   | /orders/{order_id}/message      | Send a message to the agent for an order |
-| GET    | /orders/{order_id}/conversation | Get conversation history for an order    |
-| DELETE | /orders/{order_id}              | Delete an order                          |
-| POST   | /sms-webhook                    | Handle incoming SMS from Twilio          |
-| POST   | /test-sms                       | Send a test SMS to the verified number   |
-| PUT    | /orders/{order_id}              | Update an existing order                 |
-| POST   | /orders/{order_id}/reset        | Reset the conversation for an order      |
+| Method | Endpoint                        | Description                                      |
+| ------ | ------------------------------- | ------------------------------------------------ |
+| GET    | /orders                         | List all orders                                  |
+| POST   | /orders                         | Create a new order (used by the extension)       |
+| POST   | /orders/{order_id}/message      | Send a message to the agent for a specific order |
+| GET    | /orders/{order_id}/conversation | Get the conversation history for an order        |
+| GET    | /api/v1/facebook/webhook        | Verifies the Facebook webhook                    |
+| POST   | /api/v1/facebook/webhook        | Handles incoming messages from Messenger         |
 
 ---
 
 ## Environment Variables
 
-| Variable                     | Description                                                   |
-| ---------------------------- | ------------------------------------------------------------- |
-| TWILIO_ACCOUNT_SID           | Twilio Account SID                                            |
-| TWILIO_AUTH_TOKEN            | Twilio Auth Token                                             |
-| TWILIO_PHONE_NUMBER          | Twilio phone number (E.164)                                   |
-| TWILIO_MESSAGING_SERVICE_SID | Messaging Service SID (must have phone number, SMS enabled)   |
-| VERIFIED_TEST_NUMBER         | Phone number for test SMS endpoint                            |
-| GOOGLE_API_KEY               | Google Generative AI API key                                  |
-| USE_MOCK_SMS                 | (Optional) 'true' to disable real SMS sending (for local dev) |
+| Variable                   | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| GOOGLE_API_KEY             | Your Google Generative AI API key.                       |
+| FACEBOOK_VERIFY_TOKEN      | A secret token you create for webhook verification.      |
+| FACEBOOK_PAGE_ACCESS_TOKEN | The access token for your Facebook Page.                 |
+| FACEBOOK_PSID              | The Page-Scoped ID of the user to send test messages to. |
+| TWILIO_ACCOUNT_SID         | (Optional) Twilio Account SID for SMS functionality.     |
+| TWILIO_AUTH_TOKEN          | (Optional) Twilio Auth Token for SMS functionality.      |
+| TWILIO_PHONE_NUMBER        | (Optional) Your Twilio phone number for sending SMS.     |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature/your-feature`)
-3. Make your changes and commit (`git commit -am 'feat: ...'`)
-4. Push the branch (`git push origin feature/your-feature`)
-5. Open a Pull Request
+Contributions are welcome! Please fork the repository and open a pull request with your changes.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
----
-
-## Contact
-
-For questions or suggestions, contact [Adem Fennani](mailto:ademfennani7@gmail.com).
+This project is licensed under the MIT License.

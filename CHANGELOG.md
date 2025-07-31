@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0] - 2025-07-31
+
+### Added
+
+- **Browser Extension**: A Chrome extension that automatically detects order details from e-commerce confirmation pages (e.g., Facebook Marketplace) and sends them to the agent.
+- **Facebook Messenger Integration**: The agent now automatically sends order confirmation messages to users on Facebook Messenger upon order creation.
+- **Automated End-to-End Workflow**: A complete, automated cycle from order detection to final confirmation via Messenger.
+- **Extension Settings**: The browser extension includes a settings page to configure user details (name and phone number).
+
+### Features
+
+- **Automated Order Detection**: Seamlessly captures order information from websites without manual data entry.
+- **Proactive Messenger Conversation**: Initiates the confirmation process on Messenger as soon as an order is detected.
+- **User-configurable Extension**: Users can easily set their personal information for accurate order creation.
+
+### Technical Details
+
+- A new `extension` module in the `src` directory containing the Chrome extension's source code.
+- A dedicated `facebook_routes.py` for handling Messenger webhooks.
+- The `create_order` endpoint now triggers an automatic message via the `FacebookService`.
+
+### Fixed
+
+- The `content_script.js` now correctly injects a button for manual data extraction on test pages.
+
+### Known Issues
+
+- The Facebook Messenger integration currently relies on a hardcoded `FACEBOOK_PSID` for sending messages.
+- The browser extension's selectors for scraping order data may need to be updated if the target websites change their layout.
+
+---
+
 ## [0.2.0] - 2025-07-23
 
 ### Added
