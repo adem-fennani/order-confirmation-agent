@@ -19,7 +19,8 @@
     {
       "matches": [
         "https://www.facebook.com/marketplace/checkout/done/*",
-        "https://www.facebook.com/marketplace/orders/*/receipt/*"
+        "https://www.facebook.com/marketplace/orders/*/receipt/*",
+        "http://localhost:8080/*"
       ],
       "js": ["content_script.js"]
     }

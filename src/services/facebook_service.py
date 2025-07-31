@@ -46,7 +46,8 @@ class FacebookService:
         payload = {
             "recipient": {"id": recipient_id},
             "message": {"text": message_text},
-            "messaging_type": "RESPONSE",
+            "messaging_type": "MESSAGE_TAG",
+            "tag": "CONFIRMED_EVENT_UPDATE",
         }
 
         async with httpx.AsyncClient() as client:
