@@ -1,13 +1,18 @@
 // This script runs on the Facebook Marketplace confirmation page.
 
-function extractOrderData() {
+async function extractOrderData() {
+    // 1. Get user data from storage
+    const userData = await new Promise((resolve) => {
+        chrome.storage.sync.get(['customerName', 'customerPhone'], (items) => {
+            resolve(items);
+        });
+    });
+
     let orderData = {};
 
-    // --- Customer Information (Placeholders - will need user input or pre-configuration) ---
-    // As per the documentation, customer name and phone are not on the confirmation page.
-    // These will need to be set via the extension's options page or hardcoded for testing.
-    orderData.customer_name = "Facebook User"; // Placeholder
-    orderData.customer_phone = "+15551234567"; // Placeholder
+    // --- Customer Information ---
+    orderData.customer_name = userData.customerName || "Facebook User"; // Fallback to placeholder
+    orderData.customer_phone = userData.customerPhone || "+15551234567"; // Fallback to placeholder
 
     // --- Item Details ---
     let items = [];
@@ -48,10 +53,12 @@ function extractOrderData() {
 }
 
 // Send the extracted data to the background script
-const extractedData = extractOrderData();
-if (extractedData.items && extractedData.items.length > 0 && extractedData.total_amount > 0) {
-    console.log("Detected order data:", extractedData);
-    chrome.runtime.sendMessage({ action: "sendOrderData", orderData: extractedData });
-} else {
-    console.warn("No valid order data extracted. This might not be a confirmation page or selectors are incorrect.");
-}
+(async () => {
+    const extractedData = await extractOrderData();
+    if (extractedData.items && extractedData.items.length > 0 && extractedData.total_amount > 0) {
+        console.log("Detected order data:", extractedData);
+        chrome.runtime.sendMessage({ action: "sendOrderData", orderData: extractedData });
+    } else {
+        console.warn("No valid order data extracted. This might not be a confirmation page or selectors are incorrect.");
+    }
+})();

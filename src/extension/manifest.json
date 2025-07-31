@@ -5,8 +5,10 @@
   "description": "Detects Facebook Marketplace purchase confirmations and sends order data to the Order Confirmation Agent.",
   "permissions": [
     "tabs",
-    "scripting"
+    "scripting",
+    "storage"
   ],
+  "options_page": "options.html",
   "host_permissions": [
     "https://www.facebook.com/marketplace/checkout/done/*",
     "https://www.facebook.com/marketplace/orders/*/receipt/*",
