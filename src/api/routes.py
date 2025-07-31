@@ -140,7 +140,7 @@ async def get_conversation(order_id: str, db=Depends(get_db)):
     return {"conversation": conversation}
 
 @router.post("/orders")
-async def create_order(order: CreateOrder, db=Depends(get_db)):
+async def create_order(order: CreateOrder, db=Depends(get_db), agent: Agent = Depends(get_agent)):
     order_id = f"order_{str(uuid.uuid4())[:8]}"
     now = datetime.utcnow()
     async with db.Session() as session:
@@ -157,6 +157,17 @@ async def create_order(order: CreateOrder, db=Depends(get_db)):
         )
         session.add(new_order)
         await session.commit()
+
+    # Automatically trigger the confirmation message
+    try:
+        initial_response = await agent.start_conversation(order_id, language="fr")
+        # Hardcoded PSID for now
+        PSID = os.environ.get("FACEBOOK_PSID")
+        facebook_service = FacebookService()
+        await facebook_service.send_message(recipient_id=PSID, message_text=initial_response)
+    except Exception as e:
+        print(f"ERROR: Failed to send initial confirmation Messenger message to {PSID}: {e}")
+
     return {"id": order_id, "status": "created"}
 
 @router.delete("/orders/{order_id}")
