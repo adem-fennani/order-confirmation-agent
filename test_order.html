@@ -5,37 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Facebook Marketplace Order Confirmation</title>
     <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
-        h1 { font-size: 24px; color: #1877f2; }
-        .order-details { margin-top: 20px; }
-        .item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; padding: 15px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); background-color: #f0f2f5; }
+        h1 { font-size: 28px; color: #1877f2; text-align: center; margin-bottom: 20px; }
+        h2 { font-size: 20px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 15px; }
+        .header-image { width: 100%; height: 150px; background-color: #e0e0e0; margin-bottom: 20px; overflow: hidden; border-radius: 8px; }
+        .header-image img { width: 100%; object-fit: cover; }
+        .seller-info { display: flex; align-items: center; margin-bottom: 20px; padding: 10px; background-color: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .seller-info img { width: 50px; height: 50px; border-radius: 50%; margin-right: 15px; object-fit: cover; border: 2px solid #1877f2; }
+        .seller-name { font-weight: bold; color: #1877f2; }
+        .order-details { margin-top: 20px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .item { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
         .item:last-child { border-bottom: none; }
-        .item-name { flex-grow: 1; }
-        .item-quantity { margin-left: 20px; }
-        .item-price { margin-left: 20px; font-weight: bold; }
-        .total { text-align: right; margin-top: 20px; font-size: 18px; font-weight: bold; }
+        .item-image { width: 70px; height: 70px; object-fit: cover; border-radius: 4px; margin-right: 15px; border: 1px solid #eee; }
+        .item-info { flex-grow: 1; display: flex; justify-content: space-between; align-items: center; }
+        .item-name { font-weight: bold; }
+        .item-quantity { margin-left: 10px; color: #555; }
+        .item-price { margin-left: 10px; font-weight: bold; color: #1c1e21; }
+        .total { text-align: right; margin-top: 20px; font-size: 22px; font-weight: bold; color: #1c1e21; padding-top: 10px; border-top: 1px solid #eee; }
+        .disclaimer { font-size: 12px; color: #777; text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px dashed #eee; }
     </style>
 </head>
 <body>
 
-    <h1>Your order is confirmed!</h1>
-    <p>This is a test page to simulate a Facebook Marketplace order confirmation.</p>
+    <div class="header-image">
+        <img src="https://via.placeholder.com/600x150?text=Facebook+Marketplace" alt="Marketplace Header">
+    </div>
+
+    <h1>Your Order Confirmation</h1>
+    <p style="text-align: center; color: #555;">Thank you for your purchase!</p>
+
+    <div class="seller-info">
+        <img src="https://via.placeholder.com/50?text=Seller" alt="Seller Profile Picture">
+        <div>
+            Sold by: <span class="seller-name">Marketplace Seller Pro</span>
+        </div>
+    </div>
 
     <div class="order-details">
-        <h2>Order Details</h2>
+        <h2>Order Summary</h2>
 
         <!-- Item 1 -->
         <div class="item _1g_5">
-            <span class="item-name _3-94">Jeans</span>
-            <span class="item-quantity _3-95">x1</span>
-            <span class="item-price _3-96">$65.00</span>
+            <img src="https://via.placeholder.com/70?text=Jeans" alt="Jeans" class="item-image">
+            <div class="item-info">
+                <span class="item-name _3-94">Jeans</span>
+                <span class="item-quantity _3-95">x1</span>
+                <span class="item-price _3-96">$65.00</span>
+            </div>
         </div>
 
         <!-- Item 2 -->
         <div class="item _1g_5">
-            <span class="item-name _3-94">Fedora</span>
-            <span class="item-quantity _3-95">x3</span>
-            <span class="item-price _3-96">$18.00</span>
+            <img src="https://via.placeholder.com/70?text=Fedora" alt="Fedora" class="item-image">
+            <div class="item-info">
+                <span class="item-name _3-94">Fedora</span>
+                <span class="item-quantity _3-95">x3</span>
+                <span class="item-price _3-96">$18.00</span>
+            </div>
         </div>
 
         <!-- Total -->
@@ -45,5 +71,9 @@
         </div>
     </div>
 
-    </body>
+    <p class="disclaimer">
+        This is a simulated order confirmation page for testing purposes. All product details and prices are illustrative.
+    </p>
+
+</body>
 </html>
