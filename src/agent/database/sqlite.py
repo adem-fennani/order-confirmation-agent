@@ -8,24 +8,31 @@ from .models import Base, OrderModel, ConversationModel
 from .base import DatabaseInterface
 from sqlalchemy import select, delete
 
+from sqlalchemy import create_engine
+
 class SQLiteDatabase(DatabaseInterface):
-    def __init__(self, db_url="sqlite+aiosqlite:///orders.db?check_same_thread=False"):
-        self.engine = create_async_engine(db_url)
-        self.Session = sessionmaker(
-            bind=self.engine,
+    def __init__(self, db_url="sqlite+aiosqlite:///orders.db?check_same_thread=False", sync_db_url="sqlite:///orders.db"):
+        self.async_engine = create_async_engine(db_url)
+        self.sync_engine = create_engine(sync_db_url)
+        self.AsyncSession = sessionmaker(
+            bind=self.async_engine,
             class_=AsyncSession,
             expire_on_commit=False
         )
+        self.SyncSession = sessionmaker(bind=self.sync_engine)
+
+    def get_session(self):
+        return self.SyncSession()
 
     async def create_order(self, order_data: Dict) -> None:
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             order_data['created_at'] = datetime.fromisoformat(order_data['created_at'])
             order = OrderModel(**order_data)
             session.add(order)
             await session.commit()
 
     async def get_order(self, order_id: str) -> Optional[Dict]:
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             result = await session.execute(select(OrderModel).filter_by(id=order_id))
             order = result.scalars().first()
             if order:
@@ -49,7 +56,7 @@ class SQLiteDatabase(DatabaseInterface):
         return None
 
     async def update_order(self, order_id: str, updates: Dict[str, Any]) -> bool:
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             result = await session.execute(select(OrderModel).filter_by(id=order_id))
             order = result.scalars().first()
             if order:
@@ -64,7 +71,7 @@ class SQLiteDatabase(DatabaseInterface):
 
     async def get_order_by_phone(self, phone_number: str) -> Optional[Dict]:
         """Get the most recent active order for a given phone number."""
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             result = await session.execute(select(OrderModel).filter(
                 OrderModel.customer_phone == phone_number,
                 OrderModel.status == 'pending'
@@ -91,7 +98,7 @@ class SQLiteDatabase(DatabaseInterface):
         return None
 
     async def get_conversation(self, order_id: str) -> Optional[Dict]:
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             result = await session.execute(select(ConversationModel).filter_by(order_id=order_id))
             conv = result.scalars().first()
             if conv:
@@ -115,7 +122,7 @@ class SQLiteDatabase(DatabaseInterface):
         return None
 
     async def update_conversation(self, order_id: str, conversation: Dict) -> bool:
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             result = await session.execute(select(ConversationModel).filter_by(order_id=order_id))
             conv = result.scalars().first()
             if conv:
@@ -150,14 +157,14 @@ class SQLiteDatabase(DatabaseInterface):
 
     async def delete_conversation(self, order_id: str) -> bool:
         """Delete conversation for an order"""
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             await session.execute(delete(ConversationModel).filter_by(order_id=order_id))
             await session.commit()
             return True
 
     async def get_all_orders(self) -> list[Dict]:
         """Get all orders from the database."""
-        async with self.Session() as session:
+        async with self.AsyncSession() as session:
             result = await session.execute(select(OrderModel))
             db_orders = result.scalars().all()
             orders = []

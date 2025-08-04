@@ -1,75 +1,233 @@
+# Business Admin Panel Feature - MVP with WooCommerce Integration
 
-# Business Admin Panel Feature
-
-This document outlines the plan for implementing a business admin panel, allowing businesses to access and manage their orders.
+This document outlines the complete plan for implementing a business admin panel with WooCommerce order detection, designed to be completed within one week.
 
 ## 1. Overview
 
-The goal is to create a secure area for businesses to view their orders and conversations. This will be achieved by extending the existing FastAPI application with new models, API endpoints, and a dedicated admin page.
+The goal is to create a complete order confirmation system where:
 
-## 2. Database Schema Changes
+1. Customers make orders on WooCommerce sites
+2. Browser extension detects order details
+3. Customer confirms order via Messenger
+4. Order appears in business owner's admin panel
 
-We will add two new tables to the database: `businesses` and `users`. We will also add a `business_id` to the `orders` table.
+This MVP version prioritizes speed of development while maintaining core functionality using session-based authentication, API keys for order submission, and a simplified database structure.
 
-### `businesses` table
+## 2. Complete User Flow
 
-| Column | Type | Description |
-|---|---|---|
-| `id` | `String(50)` | Primary Key |
-| `name` | `String(100)` | Name of the business |
-| `api_key` | `String(100)` | Unique API key for the business |
-| `site_id` | `String(100)` | Unique ID for the business's site |
-| `created_at` | `DateTime` | Timestamp of creation |
+1. **Business Setup**: Business owner registers and gets API key + site ID
+2. **WooCommerce Order**: Customer completes purchase on WooCommerce site
+3. **Order Detection**: Browser extension detects order details from confirmation page
+4. **Messenger Confirmation**: Customer confirms order details via Messenger
+5. **Order Submission**: Extension submits confirmed order to API using business API key
+6. **Admin Notification**: Order appears in business owner's admin panel
 
-### `users` table
+## 3. Database Schema Changes
 
-| Column | Type | Description |
-|---|---|---|
-| `id` | `Integer` | Primary Key |
-| `username` | `String(50)` | Unique username for login |
-| `password_hash` | `String(100)` | Hashed password |
-| `business_id` | `String(50)` | Foreign key to `businesses` table |
+### Modify existing `orders` table
 
-### `orders` table modification
+Add new columns to the existing `orders` table:
 
-Add a new column to the existing `orders` table:
+| Column        | Type          | Description                                     |
+| ------------- | ------------- | ----------------------------------------------- |
+| `business_id` | `String(100)` | Business identifier (matches business owner)    |
+| `site_url`    | `String(255)` | The WooCommerce site URL where order originated |
+| `site_id`     | `String(100)` | Unique identifier for the specific site         |
 
-| Column | Type | Description |
-|---|---|---|
-| `business_id` | `String(50)` | Foreign key to `businesses` table |
+### New `business_users` table
 
-## 3. API Endpoints
+| Column          | Type          | Description                                      |
+| --------------- | ------------- | ------------------------------------------------ |
+| `id`            | `Integer`     | Primary Key (auto-increment)                     |
+| `username`      | `String(50)`  | Unique username for login                        |
+| `password_hash` | `String(255)` | Bcrypt hashed password                           |
+| `business_id`   | `String(100)` | Business identifier (matches orders.business_id) |
+| `api_key`       | `String(100)` | Unique API key for order submissions             |
+| `created_at`    | `DateTime`    | Timestamp of creation                            |
 
-We will create the following new API endpoints:
+## 4. API Endpoints
 
-### Authentication
+### Business Authentication & Management
 
-*   `POST /api/v1/business/register`: Register a new business and user.
-*   `POST /api/v1/business/login`: Log in a user and return a JWT token.
+- `POST /api/business/login`: Authenticate business user
 
-### Business Admin
+  - Input: `username`, `password`
+  - Output: `token`, `business_id`
+  - Uses bcrypt for password verification
 
-*   `GET /api/v1/business/orders`: Get all orders for the authenticated business.
-*   `GET /api/v1/business/orders/{order_id}`: Get a specific order and its conversation.
-*   `GET /api/v1/business/api_key`: Get the API key and site ID for the authenticated business.
+- `GET /api/business/orders`: Get all orders for authenticated business
 
-## 4. Frontend
+  - Requires: Bearer token authentication
+  - Filters orders by `business_id`
+  - Returns: List of orders with site information
 
-We will create a new admin page at `/static/admin.html`. This page will include:
+- `GET /api/business/orders/{order_id}`: Get specific order details
 
-*   A login form.
-*   A dashboard to display a list of orders.
-*   A detail view to show the order details and conversation history.
-*   A section to display the business's API key and site ID.
+  - Requires: Bearer token authentication
+  - Validates order belongs to authenticated business
+  - Returns: Complete order information including conversation data
 
-## 5. Implementation Steps
+- `GET /api/business/api-key`: Get API key for authenticated business
+  - Requires: Bearer token authentication
+  - Returns: API key for configuring extension
 
-1.  **Create new database models:** Implement the `Business` and `User` models in `src/agent/database/models.py`.
-2.  **Update `OrderModel`:** Add the `business_id` to the `OrderModel`.
-3.  **Create database migration:** Write a script to update the database schema.
-4.  **Implement API endpoints:** Create the new API endpoints in a new file `src/api/business_routes.py`.
-5.  **Implement authentication:** Use JWT for securing the business admin endpoints.
-6.  **Create admin page:** Build the `admin.html` page with HTML, CSS, and JavaScript.
-7.  **Connect frontend to backend:** Use JavaScript to fetch data from the new API endpoints and display it on the admin page.
+### Order Submission (for Extension)
 
-This plan provides a clear path to implementing the business admin panel. Let me know if you have any questions or would like to proceed with the implementation.
+- `POST /api/orders/submit`: Submit confirmed order from WooCommerce
+  - Headers: `X-API-Key: {business_api_key}`
+  - Input: `site_id`, `site_url`, `order_data`, `customer_info`
+  - Validates API key and creates order record
+  - Returns: Order confirmation with order ID
+
+## 5. Authentication Systems
+
+### Business Admin Authentication
+
+- Session-based authentication for admin panel
+- Bearer token for API access
+- Client-side token storage using localStorage
+
+### Order Submission Authentication
+
+- API key validation for extension submissions
+- Business-level data isolation
+- Site-specific order routing
+
+## 6. Frontend - Business Admin Panel
+
+Single-page application structure:
+
+### File Structure:
+
+```
+/static/
+  ├── admin.html    # Main admin interface
+  ├── admin.css     # Styling
+  └── admin.js      # Application logic
+```
+
+### Admin Panel Features:
+
+- **Login Interface**: Username/password authentication
+- **Orders Dashboard**: Table view of all business orders with site information
+- **Order Details**: Modal popup showing complete order and conversation data
+- **API Settings**: Display API key and site registration
+- **Site Management**: Register new WooCommerce sites with site IDs
+
+## 7. Browser Extension Updates
+
+### WooCommerce Integration:
+
+- **Order Detection**: Identify WooCommerce order confirmation pages
+- **Data Extraction**: Parse order details (items, prices, customer info, order ID)
+- **API Configuration**: Store business API key and site ID in extension settings
+- **Order Submission**: POST confirmed orders to business API
+
+### Extension Flow:
+
+1. Detect WooCommerce order success page
+2. Extract order details from DOM
+3. Prompt customer for Messenger confirmation
+4. Submit order to API with business credentials
+5. Show confirmation to customer
+
+## 8. Implementation Timeline (6 Days, 5 Hours Each)
+
+### Day 1: Database & Core Backend (5 hours)
+
+- **Database Schema**: Update orders table, create business_users table with migration
+- **API Key System**: Generate and validate API keys
+- **Basic Models**: Create BusinessUser model with API key field
+
+### Day 2: Authentication APIs (5 hours)
+
+- **Business Authentication**: Login endpoint with session management
+- **Password Security**: Bcrypt hashing and validation
+- **Session Middleware**: Token validation for protected endpoints
+
+### Day 3: Business Management APIs (5 hours)
+
+- **Orders API**: Get orders filtered by business_id
+- **Order Details API**: Individual order retrieval with validation
+- **API Key Endpoint**: Return API key for authenticated business
+
+### Day 4: Order Submission & Extension (5 hours)
+
+- **Order Submission API**: Accept orders from extension with API key auth
+- **WooCommerce Detection**: Update extension for order page recognition
+- **Extension Integration**: API key configuration and order posting
+
+### Day 5: Admin Panel Frontend (5 hours)
+
+- **Core UI**: Login form, dashboard layout, orders table
+- **JavaScript Logic**: AdminApp class with authentication flow
+- **API Integration**: Connect all frontend components to backend APIs
+
+### Day 6: Complete Integration & Testing (5 hours)
+
+- **Order Details Modal**: Full order information display
+- **API Settings UI**: Show API key and basic site management
+- **End-to-End Testing**: Full WooCommerce → Extension → Admin flow
+- **Basic Styling**: Minimal responsive design for usability
+
+## 9. Technical Implementation
+
+### Backend Dependencies:
+
+- `python-jose[cryptography]`: Token handling
+- `passlib[bcrypt]`: Password hashing
+- FastAPI security utilities
+
+### API Key Generation:
+
+```python
+import secrets
+api_key = secrets.token_urlsafe(32)
+```
+
+### Frontend Architecture:
+
+- Vanilla JavaScript with class-based structure
+- Fetch API for all backend communication
+- LocalStorage for session persistence
+- Modal-based UI for order details
+
+### Extension Integration:
+
+- WooCommerce DOM parsing for order data
+- Configuration UI for API key and site ID
+- Error handling for API submission failures
+
+## 10. Business Onboarding Process
+
+1. **Registration**: Business creates account in admin panel
+2. **API Key**: System generates unique API key automatically
+3. **Site Registration**: Business adds their WooCommerce site with custom site ID
+4. **Extension Setup**: Business configures browser extension with API key and site ID
+5. **Testing**: Verify complete flow with test order
+
+## 11. Security Considerations
+
+- API key validation for all order submissions
+- Business-level data isolation (orders only visible to correct business)
+- Session token expiration for admin panel
+- Input validation for all WooCommerce order data
+- Rate limiting on order submission endpoint
+
+## 12. Future Enhancements
+
+**Phase 2:**
+
+- Multiple API keys per business
+- Advanced WooCommerce integration (webhooks)
+- Real-time order notifications
+- Analytics dashboard
+
+**Phase 3:**
+
+- Support for other e-commerce platforms
+- Mobile admin app
+- Advanced reporting features
+- Webhook integrations for third-party systems
+
+This plan provides a complete order confirmation system that bridges WooCommerce, Messenger confirmation, and business administration in a single integrated solution.

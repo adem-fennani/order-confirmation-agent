@@ -3,7 +3,7 @@ from typing import List, Optional, Dict
 from src.agent.models import OrderItem, Order, ConversationState, Message
 from src.agent.database.models import OrderModel
 from src.api.schemas import CreateOrder
-from src.api.dependencies import get_db, get_agent
+from src.api.dependencies import get_db_interface, get_agent
 from src.agent.database.base import DatabaseInterface
 from src.agent.agent import OrderConfirmationAgent as Agent
 import uuid
@@ -19,7 +19,7 @@ import os
 router = APIRouter()
 
 @router.get("/orders")
-async def get_orders(db=Depends(get_db)):
+async def get_orders(db=Depends(get_db_interface)):
     orders = []
     async with db.Session() as session:
         result = await session.execute(select(OrderModel))
@@ -45,7 +45,7 @@ async def get_orders(db=Depends(get_db)):
     return {"orders": orders}
 
 @router.get("/orders/{order_id}")
-async def get_order(order_id: str, db=Depends(get_db)):
+async def get_order(order_id: str, db=Depends(get_db_interface)):
     async with db.Session() as session:
         result = await session.execute(select(OrderModel).filter_by(id=order_id))
         order = result.scalars().first()
@@ -75,7 +75,7 @@ async def get_order(order_id: str, db=Depends(get_db)):
 async def start_confirmation(
     order_id: str,
     payload: dict = Body(...),
-    db: DatabaseInterface = Depends(get_db),
+    db: DatabaseInterface = Depends(get_db_interface),
     agent: Agent = Depends(get_agent)
 ):
     """Starts a confirmation conversation in either 'web' or 'sms' mode."""
@@ -133,14 +133,14 @@ async def send_message(order_id: str, message: dict, agent=Depends(get_agent)):
     }
 
 @router.get("/orders/{order_id}/conversation")
-async def get_conversation(order_id: str, db=Depends(get_db)):
+async def get_conversation(order_id: str, db=Depends(get_db_interface)):
     conversation = await db.get_conversation(order_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"conversation": conversation}
 
 @router.post("/orders")
-async def create_order(order: CreateOrder, db=Depends(get_db), agent: Agent = Depends(get_agent)):
+async def create_order(order: CreateOrder, db=Depends(get_db_interface), agent: Agent = Depends(get_agent)):
     order_id = f"order_{str(uuid.uuid4())[:8]}"
     now = datetime.utcnow()
     async with db.Session() as session:
@@ -171,7 +171,7 @@ async def create_order(order: CreateOrder, db=Depends(get_db), agent: Agent = De
     return {"id": order_id, "status": "created"}
 
 @router.delete("/orders/{order_id}")
-async def delete_order(order_id: str, db=Depends(get_db)):
+async def delete_order(order_id: str, db=Depends(get_db_interface)):
     async with db.Session() as session:
         result = await session.execute(select(OrderModel).filter_by(id=order_id))
         order = result.scalars().first()
@@ -183,7 +183,7 @@ async def delete_order(order_id: str, db=Depends(get_db)):
     return {"id": order_id, "status": "deleted"}
 
 @router.put("/orders/{order_id}")
-async def update_order(order_id: str, order: dict = Body(...), db=Depends(get_db)):
+async def update_order(order_id: str, order: dict = Body(...), db=Depends(get_db_interface)):
     async with db.Session() as session:
         result = await session.execute(select(OrderModel).filter_by(id=order_id))
         db_order = result.scalars().first()
@@ -199,7 +199,7 @@ async def update_order(order_id: str, order: dict = Body(...), db=Depends(get_db
     return {"id": order_id, "status": "updated"}
 
 @router.post("/orders/{order_id}/reset")
-async def reset_conversation(order_id: str, db=Depends(get_db), agent=Depends(get_agent)):
+async def reset_conversation(order_id: str, db=Depends(get_db_interface), agent=Depends(get_agent)):
     try:
         result = await agent.reset_conversation(order_id)
         return jsonable_encoder(result)
@@ -223,7 +223,7 @@ async def send_test_sms():
 async def sms_webhook(
     From: str = Form(...),
     Body: str = Form(...),
-    db: DatabaseInterface = Depends(get_db),
+    db: DatabaseInterface = Depends(get_db_interface),
     agent: Agent = Depends(get_agent)
 ):
     """Handle incoming SMS messages from Twilio and reply with TwiML."""
