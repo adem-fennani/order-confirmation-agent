@@ -4,7 +4,7 @@ import os
 import logging
 from src.services.facebook_service import FacebookService
 from src.agent.agent import OrderConfirmationAgent
-from src.api.dependencies import get_agent, get_db
+from src.api.dependencies import get_agent, get_db_interface
 from src.agent.database.base import DatabaseInterface
 from src.agent.models import Order
 
@@ -111,7 +111,7 @@ async def facebook_webhook(request: Request):
                     
                     # Get agent and db instances
                     agent = get_agent()
-                    db = get_db()
+                    db = get_db_interface()
 
                     # Find the most recent pending order (temporary workaround for hardcoded PSID)
                     # In a real scenario, you'd link PSID to an order in your DB

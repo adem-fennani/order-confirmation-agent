@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Body, Depends, Form, Response
 from typing import List, Optional, Dict
 from src.agent.models import OrderItem, Order, ConversationState, Message
-from src.agent.database.models import OrderModel
-from src.api.schemas import CreateOrder
-from src.api.dependencies import get_db_interface, get_agent
+from src.agent.database.models import OrderModel, BusinessUser
+from src.api.schemas import CreateOrder, OrderSubmission, Order as OrderSchema
+from src.api.dependencies import get_db_interface, get_agent, verify_api_key
 from src.agent.database.base import DatabaseInterface
 from src.agent.agent import OrderConfirmationAgent as Agent
 import uuid
@@ -169,6 +169,61 @@ async def create_order(order: CreateOrder, db=Depends(get_db_interface), agent: 
         print(f"ERROR: Failed to send initial confirmation Messenger message to {PSID}: {e}")
 
     return {"id": order_id, "status": "created"}
+
+@router.post("/orders/submit", response_model=OrderSchema)
+async def submit_order(
+    order_data: OrderSubmission,
+    business_user: BusinessUser = Depends(verify_api_key),
+    db: DatabaseInterface = Depends(get_db_interface),
+    agent: Agent = Depends(get_agent)
+):
+    order_id = f"order_{str(uuid.uuid4())[:8]}"
+    now = datetime.utcnow()
+
+    print(f"DEBUG: items before OrderModel: {order_data.order_data.items}")
+    new_order_data = {
+        "id": order_id,
+        "customer_name": order_data.customer_info.customer_name,
+        "customer_phone": order_data.customer_info.customer_phone,
+        "items": [item.dict() for item in order_data.order_data.items],
+        "total_amount": order_data.order_data.total_amount,
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "confirmed_at": None,
+        "notes": order_data.order_data.notes,
+        "business_id": business_user.business_id,
+        "site_url": order_data.site_url,
+        "site_id": order_data.site_id
+    }
+    await db.create_order(new_order_data)
+
+    # Create an OrderSchema instance for the response
+    response_order = OrderSchema(
+        id=order_id,
+        customer_name=order_data.customer_info.customer_name,
+        customer_phone=order_data.customer_info.customer_phone,
+        items=order_data.order_data.items,
+        total_amount=order_data.order_data.total_amount,
+        status="pending",
+        created_at=now,
+        confirmed_at=None,
+        notes=order_data.order_data.notes,
+        business_id=business_user.business_id,
+        site_url=order_data.site_url,
+        site_id=order_data.site_id
+    )
+
+    # Automatically trigger the confirmation message
+    PSID = os.environ.get("FACEBOOK_PSID") # Ensure PSID is always defined
+    try:
+        initial_response = await agent.start_conversation(order_id, language="fr")
+        # Hardcoded PSID for now
+        facebook_service = FacebookService()
+        await facebook_service.send_message(recipient_id=PSID, message_text=initial_response)
+    except Exception as e:
+        print(f"ERROR: Failed to send initial confirmation Messenger message to {PSID}: {e}")
+
+    return response_order
 
 @router.delete("/orders/{order_id}")
 async def delete_order(order_id: str, db=Depends(get_db_interface)):

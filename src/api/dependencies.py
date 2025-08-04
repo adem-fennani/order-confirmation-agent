@@ -14,25 +14,17 @@ async def create_db_tables():
     return True
 
 
-def get_db():
-    db = SQLiteDatabase()
-    session = db.get_session()
-    try:
-        yield session
-    finally:
-        session.close()
-
 def get_db_interface():
     return SQLiteDatabase()
 
 async def get_agent(db: DatabaseInterface = Depends(get_db_interface)) -> OrderConfirmationAgent:
     return OrderConfirmationAgent(db)
 
-async def verify_api_key(x_api_key: str = Header(...), session: Session = Depends(get_db)):
+async def verify_api_key(x_api_key: str = Header(...), db: SQLiteDatabase = Depends(get_db_interface)):
     if not x_api_key:
         raise HTTPException(status_code=400, detail="X-API-Key header missing")
     
-    user = session.query(BusinessUser).filter_by(api_key=x_api_key).first()
+    user = await db.get_business_user_by_api_key(x_api_key)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid API Key")
     

@@ -1,11 +1,13 @@
 # src/api/business.py
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from src.api.dependencies import verify_api_key, get_db
-from src.agent.database.models import BusinessUser
+from typing import List
+from src.api.dependencies import verify_api_key, get_db_interface
+from src.agent.database.models import BusinessUser, OrderModel
+from src.api.schemas import Order, BusinessUserSchema
+from src.agent.database.sqlite import SQLiteDatabase
 
 router = APIRouter()
 
@@ -28,7 +30,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(get_db)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: SQLiteDatabase = Depends(get_db_interface)):
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
@@ -41,14 +43,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: Session
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = session.query(BusinessUser).filter_by(username=username).first()
+    
+    # Use async db method
+    user = await db.get_business_user_by_username(username)
     if user is None:
         raise credentials_exception
     return user
 
 @router.post("/api/business/login")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_db)):
-    user = session.query(BusinessUser).filter_by(username=form_data.username).first()
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: SQLiteDatabase = Depends(get_db_interface)):
+    # Use async db method
+    user = await db.get_business_user_by_username(form_data.username)
     if not user or not user.verify_password(form_data.password):
         raise HTTPException(
             status_code=401,
@@ -63,10 +68,29 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     session_storage[access_token] = user.username # Store token
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/api/business/me")
+@router.get("/api/business/me", response_model=BusinessUserSchema)
 async def read_users_me(current_user: BusinessUser = Depends(get_current_user)):
     return current_user
 
+@router.get("/api/business/orders", response_model=List[Order])
+async def get_business_orders(skip: int = 0, limit: int = 10, current_user: BusinessUser = Depends(get_current_user), db: SQLiteDatabase = Depends(get_db_interface)):
+    # Use async db method
+    orders = await db.get_orders_by_business_id(current_user.business_id, skip=skip, limit=limit)
+    return orders
+
+@router.get("/api/business/orders/{order_id}", response_model=Order)
+async def get_business_order(order_id: str, current_user: BusinessUser = Depends(get_current_user), db: SQLiteDatabase = Depends(get_db_interface)):
+    # Use async db method
+    order = await db.get_order_by_business_id(order_id, current_user.business_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return order
+
+@router.get("/api/business/api-key")
+async def get_business_api_key(current_user: BusinessUser = Depends(get_current_user)):
+    if not current_user.api_key:
+        raise HTTPException(status_code=404, detail="API Key not found for this business.")
+    return {"api_key": current_user.api_key}
 
 @router.get("/api/business/test")
 async def test_api_key(user: BusinessUser = Depends(verify_api_key)):

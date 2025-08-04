@@ -5,14 +5,25 @@ def migrate():
     conn = sqlite3.connect('orders.db')
     cursor = conn.cursor()
 
-    try:
-        # Add columns to orders table
-        cursor.execute("ALTER TABLE orders ADD COLUMN business_id VARCHAR(100)")
-        cursor.execute("ALTER TABLE orders ADD COLUMN site_url VARCHAR(255)")
-        cursor.execute("ALTER TABLE orders ADD COLUMN site_id VARCHAR(100)")
-        print("Columns added to 'orders' table.")
-    except sqlite3.OperationalError as e:
-        print(f"Could not add columns to 'orders' table: {e}")
+    # Create orders table if it doesn't exist
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS orders (
+        id VARCHAR(50) PRIMARY KEY,
+        customer_name VARCHAR(100) NOT NULL,
+        customer_phone VARCHAR(20) NOT NULL,
+        items TEXT NOT NULL,
+        total_amount REAL NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        confirmed_at DATETIME,
+        notes TEXT,
+        delivery_address TEXT,
+        business_id VARCHAR(100),
+        site_url VARCHAR(255),
+        site_id VARCHAR(100)
+    )
+    """)
+    print("'orders' table created or already exists.")
 
     # Create business_users table
     cursor.execute("""
