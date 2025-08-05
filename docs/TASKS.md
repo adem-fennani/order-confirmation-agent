@@ -177,11 +177,11 @@
 
 **Tasks:**
 
-- [ ] Update extension to detect WooCommerce order success page patterns
-- [ ] Extract order details from DOM (items, prices, totals, order ID)
-- [ ] Add API key and site ID configuration to extension settings
-- [ ] Implement order submission to `/api/orders/submit` endpoint
-- [ ] Test with actual WooCommerce order confirmation pages
+- [x] Update extension to detect WooCommerce order success page patterns
+- [x] Extract order details from DOM (items, prices, totals, order ID)
+- [x] Add API key and site ID configuration to extension settings
+- [x] Implement order submission to `/api/orders/submit` endpoint
+- [x] Test with actual WooCommerce order confirmation pages
 
 **Acceptance Criteria:**
 
@@ -202,12 +202,12 @@
 
 **Tasks:**
 
-- [ ] Create `admin.html` with login section and dashboard layout
-- [ ] Implement `AdminApp` JavaScript class structure
-- [ ] Add login form with proper form validation
-- [ ] Create orders table with sortable columns
-- [ ] Add basic CSS styling for usability
-- [ ] Implement show/hide logic for login vs dashboard sections
+- [x] Create `admin.html` with login section and dashboard layout
+- [x] Implement `AdminApp` JavaScript class structure
+- [x] Add login form with proper form validation
+- [x] Create orders table with sortable columns
+- [x] Add basic CSS styling for usability
+- [x] Implement show/hide logic for login vs dashboard sections
 
 **Acceptance Criteria:**
 
@@ -226,11 +226,11 @@
 
 **Tasks:**
 
-- [ ] Connect login form to `POST /api/business/login` endpoint
-- [ ] Implement secure token storage in localStorage
-- [ ] Load and display orders from `GET /api/business/orders`
-- [ ] Add logout functionality with proper session cleanup
-- [ ] Handle API errors and display user-friendly messages
+- [x] Connect login form to `POST /api/business/login` endpoint
+- [x] Implement secure token storage in localStorage
+- [x] Load and display orders from `GET /api/business/orders`
+- [x] Add logout functionality with proper session cleanup
+- [x] Handle API errors and display user-friendly messages
 
 **Acceptance Criteria:**
 
@@ -251,12 +251,12 @@
 
 **Tasks:**
 
-- [ ] Create order detail modal with complete order information
-- [ ] Implement `GET /api/business/orders/{id}` integration
-- [ ] Add API settings section displaying business API key
-- [ ] Add copy-to-clipboard functionality for API key
-- [ ] Show site information and basic site management
-- [ ] Add order status and conversation data display
+- [x] Create order detail modal with complete order information
+- [x] Implement `GET /api/business/orders/{id}` integration
+- [x] Add API settings section displaying business API key
+- [x] Add copy-to-clipboard functionality for API key
+- [x] Show site information and basic site management
+- [x] Add order status and conversation data display
 
 **Acceptance Criteria:**
 
