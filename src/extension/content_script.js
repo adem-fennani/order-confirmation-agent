@@ -1,61 +1,63 @@
-// This script runs on the Facebook Marketplace confirmation page.
+// This script runs on the Facebook Marketplace and WooCommerce confirmation pages.
 
-async function extractOrderData() {
-    // 1. Get user data from storage
+async function extractFacebookOrderData() {
+    // ... (existing Facebook extraction logic)
+}
+
+async function extractWooCommerceOrderData() {
+    const orderData = {};
+
+    // --- Customer Information ---
+    // WooCommerce doesn't typically display the customer's name and phone on the confirmation page.
+    // We'll rely on the data saved in the extension's options.
     const userData = await new Promise((resolve) => {
         chrome.storage.sync.get(['customerName', 'customerPhone'], (items) => {
             resolve(items);
         });
     });
-
-    let orderData = {};
-
-    // --- Customer Information ---
-    orderData.customer_name = userData.customerName || "Facebook User"; // Fallback to placeholder
-    orderData.customer_phone = userData.customerPhone || "+15551234567"; // Fallback to placeholder
+    orderData.customer_name = userData.customerName || "WooCommerce User";
+    orderData.customer_phone = userData.customerPhone || "+15551234567";
 
     // --- Item Details ---
-    let items = [];
-    // Example selectors - these will need to be updated based on actual Facebook Marketplace HTML
-    const itemElements = document.querySelectorAll("._1g_5"); // This is a generic placeholder selector
-
+    const items = [];
+    const itemElements = document.querySelectorAll('.woocommerce-table--order-details-cart-item');
     itemElements.forEach(itemEl => {
-        const name = itemEl.querySelector("._3-94").innerText; // Placeholder
-        const quantity = parseInt(itemEl.querySelector("._3-95").innerText.replace("x", "")); // Placeholder
-        const priceText = itemEl.querySelector("._3-96").innerText; // Placeholder
-        const price = parseFloat(priceText.replace(/[^0-9.-]+/g," "));
+        const name = itemEl.querySelector('.woocommerce-table__product-name a').innerText;
+        const quantity = parseInt(itemEl.querySelector('.product-quantity').innerText.replace('×', ''));
+        const priceText = itemEl.querySelector('.woocommerce-Price-amount.amount').innerText;
+        const price = parseFloat(priceText.replace(/[^0-9.-]+/g,""));
 
         if (name && quantity && price) {
-            items.push({
-                name: name,
-                quantity: quantity,
-                price: price
-            });
+            items.push({ name, quantity, price });
         }
     });
     orderData.items = items;
 
     // --- Total Amount ---
-    // Example selector - will need to be updated
-    const totalAmountElement = document.querySelector("._3-97"); // Placeholder
+    const totalAmountElement = document.querySelector('.woocommerce-Price-amount.amount');
     if (totalAmountElement) {
         const totalAmountText = totalAmountElement.innerText;
-        orderData.total_amount = parseFloat(totalAmountText.replace(/[^0-9.-]+/g," "));
+        orderData.total_amount = parseFloat(totalAmountText.replace(/[^0-9.-]+/g,""));
     } else {
-        // Fallback: calculate total from items if total element not found
         orderData.total_amount = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
     }
 
     // --- Notes ---
-    orderData.notes = "Order automatically detected from Facebook Marketplace.";
+    orderData.notes = "Order automatically detected from WooCommerce.";
 
     return orderData;
 }
 
-// Send the extracted data to the background script
+// Main execution logic
 (async () => {
-    const extractedData = await extractOrderData();
-    if (extractedData.items && extractedData.items.length > 0 && extractedData.total_amount > 0) {
+    let extractedData;
+    if (window.location.href.includes('facebook.com')) {
+        extractedData = await extractFacebookOrderData();
+    } else if (window.location.href.includes('/checkout/order-received/')) {
+        extractedData = await extractWooCommerceOrderData();
+    }
+
+    if (extractedData && extractedData.items && extractedData.items.length > 0 && extractedData.total_amount > 0) {
         console.log("Detected order data:", extractedData);
         chrome.runtime.sendMessage({ action: "sendOrderData", orderData: extractedData });
     } else {

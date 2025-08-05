@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <div id="login-container">
+        <h1>Login</h1>
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Username" required>
+            <input type="password" id="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+
+    <div id="dashboard-container" style="display: none;">
+        <h1>Dashboard</h1>
+        <button id="logout-button">Logout</button>
+        <h2>Orders</h2>
+        <table id="orders-table">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Customer Name</th>
+                    <th>Total Amount</th>
+                    <th>Site URL</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Order rows will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <div id="order-details-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Order Details</h2>
+            <div id="modal-order-details"></div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

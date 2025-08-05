@@ -12,7 +12,9 @@
   "host_permissions": [
     "https://www.facebook.com/marketplace/checkout/done/*",
     "https://www.facebook.com/marketplace/orders/*/receipt/*",
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -22,7 +24,8 @@
       "matches": [
         "https://www.facebook.com/marketplace/checkout/done/*",
         "https://www.facebook.com/marketplace/orders/*/receipt/*",
-        "http://localhost:8080/*"
+        "http://localhost:8080/*",
+        "*/checkout/order-received/*"
       ],
       "js": ["content_script.js"]
     }

@@ -15,11 +15,11 @@
 
 **Tasks:**
 
-- [ ] Add `business_id`, `site_url`, `site_id` columns to existing `orders` table
-- [ ] Create new `business_users` table with `api_key` field
-- [ ] Write and test SQL migration script
-- [ ] Create BusinessUser model in `models.py` with API key generation
-- [ ] Test database changes with sample data
+- [x] Add `business_id`, `site_url`, `site_id` columns to existing `orders` table
+- [x] Create new `business_users` table with `api_key` field
+- [x] Write and test SQL migration script
+- [x] Create BusinessUser model in `models.py` with API key generation
+- [x] Test database changes with sample data
 
 **Acceptance Criteria:**
 
@@ -37,11 +37,11 @@
 
 **Tasks:**
 
-- [ ] Implement API key generation function using `secrets.token_urlsafe(32)`
-- [ ] Create API key validation middleware for incoming requests
-- [ ] Add API key to business user creation flow
-- [ ] Create sample test data (2-3 business users with API keys)
-- [ ] Test API key validation with mock requests
+- [x] Implement API key generation function using `secrets.token_urlsafe(32)`
+- [x] Create API key validation middleware for incoming requests
+- [x] Add API key to business user creation flow
+- [x] Create sample test data (2-3 business users with API keys)
+- [x] Test API key validation with mock requests
 
 **Acceptance Criteria:**
 
@@ -61,11 +61,11 @@
 
 **Tasks:**
 
-- [ ] Create `/src/api/business.py` FastAPI router
-- [ ] Implement `POST /api/business/login` endpoint with bcrypt validation
-- [ ] Create session token generation and validation system
-- [ ] Add in-memory session storage for MVP
-- [ ] Test login flow with sample business users
+- [x] Create `/src/api/business.py` FastAPI router
+- [x] Implement `POST /api/business/login` endpoint with bcrypt validation
+- [x] Create session token generation and validation system
+- [x] Add in-memory session storage for MVP
+- [x] Test login flow with sample business users
 
 **Acceptance Criteria:**
 
@@ -83,11 +83,11 @@
 
 **Tasks:**
 
-- [ ] Create Bearer token validation dependency for FastAPI
-- [ ] Implement session verification middleware
-- [ ] Add proper HTTP error responses for authentication failures
-- [ ] Test authentication flow with valid/invalid tokens
-- [ ] Integrate authentication dependency with business router
+- [x] Create Bearer token validation dependency for FastAPI
+- [x] Implement session verification middleware
+- [x] Add proper HTTP error responses for authentication failures
+- [x] Test authentication flow with valid/invalid tokens
+- [x] Integrate authentication dependency with business router
 
 **Acceptance Criteria:**
 
@@ -107,11 +107,11 @@
 
 **Tasks:**
 
-- [ ] Implement `GET /api/business/orders` with business_id filtering
-- [ ] Implement `GET /api/business/orders/{order_id}` with ownership validation
-- [ ] Add pagination support for orders list
-- [ ] Add proper error handling and HTTP status codes
-- [ ] Test endpoints with sample order data linked to businesses
+- [x] Implement `GET /api/business/orders` with business_id filtering
+- [x] Implement `GET /api/business/orders/{order_id}` with ownership validation
+- [x] Add pagination support for orders list
+- [x] Add proper error handling and HTTP status codes
+- [x] Test endpoints with sample order data linked to businesses
 
 **Acceptance Criteria:**
 
@@ -129,11 +129,11 @@
 
 **Tasks:**
 
-- [ ] Implement `GET /api/business/api-key` endpoint
-- [ ] Add authentication requirement for API key access
-- [ ] Return API key securely for authenticated users
-- [ ] Test API key retrieval flow
-- [ ] Add error handling for missing API keys
+- [x] Implement `GET /api/business/api-key` endpoint
+- [x] Add authentication requirement for API key access
+- [x] Return API key securely for authenticated users
+- [x] Test API key retrieval flow
+- [x] Add error handling for missing API keys
 
 **Acceptance Criteria:**
 
@@ -153,12 +153,12 @@
 
 **Tasks:**
 
-- [ ] Create `POST /api/orders/submit` endpoint
-- [ ] Implement `X-API-Key` header validation middleware
-- [ ] Parse and validate WooCommerce order data format
-- [ ] Store orders with correct business_id and site information
-- [ ] Return order confirmation response with generated order ID
-- [ ] Test with mock WooCommerce order data
+- [x] Create `POST /api/orders/submit` endpoint
+- [x] Implement `X-API-Key` header validation middleware
+- [x] Parse and validate WooCommerce order data format
+- [x] Store orders with correct business_id and site information
+- [x] Return order confirmation response with generated order ID
+- [x] Test with mock WooCommerce order data
 
 **Acceptance Criteria:**
 

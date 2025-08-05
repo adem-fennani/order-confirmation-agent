@@ -1,20 +1,28 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "sendOrderData") {
-        fetch("http://localhost:8000/orders", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(request.orderData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log("Order created successfully:", data);
-            sendResponse({ status: "success", data: data });
-        })
-        .catch(error => {
-            console.error("Error creating order:", error);
-            sendResponse({ status: "error", message: error.message });
+        chrome.storage.sync.get(['apiKey', 'siteId'], (items) => {
+            const orderData = {
+                ...request.orderData,
+                site_id: items.siteId
+            };
+
+            fetch("http://localhost:8000/api/orders/submit", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": items.apiKey
+                },
+                body: JSON.stringify(orderData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("Order created successfully:", data);
+                sendResponse({ status: "success", data: data });
+            })
+            .catch(error => {
+                console.error("Error creating order:", error);
+                sendResponse({ status: "error", message: error.message });
+            });
         });
         return true; // Indicates that sendResponse will be called asynchronously
     }
