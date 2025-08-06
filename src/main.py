@@ -32,10 +32,10 @@ async def startup_event():
 # Serve static files from the 'src/web' directory at /static
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "web"), html=True), name="static")
 
-# Redirect / to /static/index.html
+# Redirect / to /static/internal/index.html
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/static/index.html")
+    return RedirectResponse(url="/static/internal/index.html")
 
 # CORS: allow frontend served from same origin (localhost:8000)
 app.add_middleware(
