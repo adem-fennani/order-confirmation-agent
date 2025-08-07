@@ -19,23 +19,23 @@ def create_test_user():
     session = Session()
 
     # Check if user exists
-    user = session.query(BusinessUser).filter_by(username="testuser").first()
+    user = session.query(BusinessUser).filter_by(username="admin").first()
     if user:
-        print(f"Test user already exists with API key: {user.api_key}")
+        print(f"Admin user already exists with API key: {user.api_key}")
         return
 
     # Create user
     new_user = BusinessUser(
-        username="testuser",
-        business_id="test_business",
+        username="admin",
+        business_id="admin_business",
         api_key=BusinessUser.generate_api_key()
     )
-    new_user.set_password("password")
+    new_user.set_password("admin123")
     
     session.add(new_user)
     session.commit()
 
-    print(f"Test user created with API key: {new_user.api_key}")
+    print(f"Admin user created with API key: {new_user.api_key}")
 
 if __name__ == "__main__":
     create_test_user()
