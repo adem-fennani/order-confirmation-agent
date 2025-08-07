@@ -36,8 +36,8 @@ class AdminApp {
         try {
             const response = await fetch('/api/business/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `grant_type=password&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
             });
 
             if (response.ok) {
