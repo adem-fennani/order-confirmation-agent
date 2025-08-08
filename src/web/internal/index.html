@@ -28,7 +28,12 @@
         <div class="main-content">
             <div class="sidebar">
                 <h3>Commandes en attente</h3>
-                <button id="show-add-order" class="start-confirmation alt-btn" style="margin-bottom:10px;">+ Nouvelle commande</button>
+                                                <div class="action-buttons-container">
+                    <button id="show-add-order" class="start-confirmation alt-btn">+ Commande</button>
+                    <button id="admin-btn" class="admin-button" onclick="window.location.href='/static/admin/admin.html'">
+                        🛠️ Admin Panel
+                    </button>
+                </div>
                 <div class="test-buttons-container">
                     <button id="twilio-test-btn" class="start-confirmation alt-btn">Test SMS</button>
                     <button id="facebook-test-btn" class="start-confirmation alt-btn">Test Messenger</button>

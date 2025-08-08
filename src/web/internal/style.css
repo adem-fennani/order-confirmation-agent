@@ -320,6 +320,32 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+.admin-link {
+    margin-top: 15px;
+    text-align: center;
+}
+
+.admin-button {
+    background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    text-decoration: none;
+    display: inline-block;
+}
+
+.admin-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+    background: linear-gradient(135deg, #E55A2B 0%, #E0851A 100%);
+}
+
 .loading {
     display: none;
     text-align: center;
@@ -487,6 +513,54 @@ body {
 }
 .order-action-btn.delete-order-btn:hover {
     background: #0D47A1;
+}
+
+.action-buttons-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;           /* keep on one line */
+    width: 100%;                 /* span full sidebar width */
+    gap: 10px; /* Space between buttons */
+    margin-bottom: 10px; /* Space below the container */
+}
+
+.action-buttons-container .start-confirmation {
+    /* Override global sidebar button defaults for this row */
+    width: auto;               /* prevent full-width so it can share the row */
+    margin-top: 0;             /* align vertically with the admin button */
+}
+
+.action-buttons-container .alt-btn {
+    flex-grow: 0; /* Do not allow this button to grow */
+    margin-bottom: 0 !important; /* Override previous margin */
+    white-space: nowrap; /* keep label on one line */
+    min-width: 0;            /* allow flex shrink nicely */
+}
+
+.action-buttons-container .admin-button {
+    flex-grow: 0; /* Do not allow this button to grow */
+    flex-shrink: 0; /* Do not allow this button to shrink */
+    margin-bottom: 0 !important; /* Override previous margin */
+    font-size: 0.85rem;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    text-decoration: none;
+    display: inline-block;
+    margin-left: auto; /* push to the right if space is available */
+    white-space: nowrap; /* keep label on one line */
+}
+
+.action-buttons-container .admin-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+    background: linear-gradient(135deg, #E55A2B 0%, #E0851A 100%);
 }
 
 .test-buttons-container {
