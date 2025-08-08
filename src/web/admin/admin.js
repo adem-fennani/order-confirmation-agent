@@ -14,19 +14,10 @@ class AdminApp {
         this.closeButton.addEventListener('click', () => this.modal.style.display = 'none');
         this.ordersTableBody.addEventListener('click', this.handleOrderClick.bind(this));
 
-        this.checkAuth();
+        this.showLogin(); // Always show login page first
     }
 
-    async checkAuth() {
-        const token = localStorage.getItem('token');
-        if (token) {
-            this.showDashboard();
-            this.fetchOrders();
-            this.fetchApiKey();
-        } else {
-            this.showLogin();
-        }
-    }
+    
 
     async handleLogin(event) {
         event.preventDefault();
@@ -41,8 +32,6 @@ class AdminApp {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                localStorage.setItem('token', data.token);
                 this.showDashboard();
                 this.fetchOrders();
                 this.fetchApiKey();
@@ -107,11 +96,8 @@ class AdminApp {
         const orderId = event.target.closest('tr').dataset.orderId;
         if (!orderId) return;
 
-        const token = localStorage.getItem('token');
         try {
-            const response = await fetch(`/api/business/orders/${orderId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch(`/api/business/orders/${orderId}`);
 
             if (response.ok) {
                 const order = await response.json();
@@ -142,11 +128,8 @@ class AdminApp {
     }
 
     async fetchApiKey() {
-        const token = localStorage.getItem('token');
         try {
-            const response = await fetch('/api/business/api-key', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch('/api/business/api-key');
 
             if (response.ok) {
                 const data = await response.json();

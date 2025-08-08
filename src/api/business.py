@@ -1,6 +1,6 @@
 # src/api/business.py
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.security import OAuth2PasswordRequestForm, APIKeyCookie
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import List
@@ -18,7 +18,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # In-memory storage for tokens (for MVP)
 session_storage = {}
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/business/login")
+cookie_scheme = APIKeyCookie(name="access_token")
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -30,18 +30,20 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: SQLiteDatabase = Depends(get_db_interface)):
+async def get_current_user(token: str = Depends(cookie_scheme), db: SQLiteDatabase = Depends(get_db_interface)):
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        # The token from the cookie includes "Bearer ", so we need to remove it
+        token = token.split("Bearer ")[-1]
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-    except JWTError:
+    except (JWTError, IndexError):
         raise credentials_exception
     
     # Use async db method
@@ -50,8 +52,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: SQLiteDataba
         raise credentials_exception
     return user
 
+@router.post("/api/business/logout")
+async def logout(response: Response):
+    response.delete_cookie(key="access_token")
+    return {"message": "Logout successful"}
+
 @router.post("/api/business/login")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: SQLiteDatabase = Depends(get_db_interface)):
+async def login_for_access_token(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: SQLiteDatabase = Depends(get_db_interface)):
     # Use async db method
     user = await db.get_business_user_by_username(form_data.username)
     if not user or not user.verify_password(form_data.password):
@@ -65,8 +72,8 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         data={"sub": user.username, "business_id": user.business_id},
         expires_delta=access_token_expires
     )
-    session_storage[access_token] = user.username # Store token
-    return {"access_token": access_token, "token_type": "bearer"}
+    response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
+    return {"message": "Login successful"}
 
 @router.get("/api/business/me", response_model=BusinessUserSchema)
 async def read_users_me(current_user: BusinessUser = Depends(get_current_user)):
