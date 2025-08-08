@@ -8,16 +8,21 @@ class AdminApp {
         this.modal = document.getElementById('order-details-modal');
         this.modalContent = document.getElementById('modal-order-details');
         this.closeButton = document.querySelector('.close-button');
+        this.apiKeyInput = document.getElementById('api-key-input');
+        this.copyButton = document.getElementById('copy-api-key');
+        this.apiKeySection = document.getElementById('api-key-section');
 
+        this.bindEvents();
+        this.showLogin(); // Always show login page first
+    }
+
+    bindEvents() {
         this.loginForm.addEventListener('submit', this.handleLogin.bind(this));
         this.logoutButton.addEventListener('click', this.handleLogout.bind(this));
         this.closeButton.addEventListener('click', () => this.modal.style.display = 'none');
         this.ordersTableBody.addEventListener('click', this.handleOrderClick.bind(this));
-
-        this.showLogin(); // Always show login page first
+        this.copyButton.addEventListener('click', this.copyApiKey.bind(this));
     }
-
-    
 
     async handleLogin(event) {
         event.preventDefault();
@@ -44,9 +49,18 @@ class AdminApp {
         }
     }
 
-    handleLogout() {
-        localStorage.removeItem('token');
-        this.showLogin();
+    async handleLogout() {
+        try {
+            const response = await fetch('/api/business/logout', { method: 'POST' });
+            if (response.ok) {
+                this.showLogin();
+            } else {
+                alert('Logout failed');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+            alert('An error occurred during logout.');
+        }
     }
 
     showLogin() {
@@ -60,11 +74,8 @@ class AdminApp {
     }
 
     async fetchOrders() {
-        const token = localStorage.getItem('token');
         try {
-            const response = await fetch('/api/business/orders', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch('/api/business/orders');
 
             if (response.ok) {
                 const orders = await response.json();
@@ -82,11 +93,13 @@ class AdminApp {
         orders.forEach(order => {
             const row = document.createElement('tr');
             row.dataset.orderId = order.id;
+            const formattedAmount = parseFloat(order.total_amount).toFixed(3);
             row.innerHTML = `
                 <td>${order.id}</td>
                 <td>${order.customer_name}</td>
-                <td>${order.total_amount}</td>
+                <td>${formattedAmount}</td>
                 <td>${order.site_url}</td>
+                <td><span class="status-badge">${order.status}</span></td>
             `;
             this.ordersTableBody.appendChild(row);
         });
@@ -143,18 +156,18 @@ class AdminApp {
     }
 
     displayApiKey(apiKey) {
-        const apiKeyElement = document.createElement('div');
-        apiKeyElement.innerHTML = `
-            <h2>API Key</h2>
-            <input type="text" value="${apiKey}" readonly>
-            <button id="copy-api-key">Copy</button>
-        `;
-        this.dashboardContainer.appendChild(apiKeyElement);
+        this.apiKeyInput.value = apiKey;
+        this.apiKeySection.style.display = 'block';
+    }
 
-        document.getElementById('copy-api-key').addEventListener('click', () => {
-            navigator.clipboard.writeText(apiKey);
-            alert('API Key copied to clipboard');
-        });
+    async copyApiKey() {
+        try {
+            await navigator.clipboard.writeText(this.apiKeyInput.value);
+            alert('API Key copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy API key:', err);
+            alert('Failed to copy API Key.');
+        }
     }
 }
 

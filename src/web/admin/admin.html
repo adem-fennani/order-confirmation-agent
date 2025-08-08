@@ -2,46 +2,78 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Panel</title>
-    <link rel="stylesheet" href="admin.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal</title>
+    <link rel="stylesheet" href="/static/admin/admin.css">
+    <link href="https://fonts.googleapis.com/css?family=Inter:400,600,700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div id="login-container">
-        <h1>Login</h1>
-        <form id="login-form">
-            <input type="text" id="username" name="username" placeholder="Username" required>
-            <input type="password" id="password" name="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
-    </div>
+    <div class="container">
+        <div class="header">
+            <h1>🛠️ Admin Portal</h1>
+            <p>Manage your orders and settings</p>
+        </div>
+        <div class="main-content">
+            <!-- Login Container -->
+            <div id="login-container">
+                <form id="login-form" class="login-form">
+                    <h2>Admin Login</h2>
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" placeholder="Enter username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" placeholder="Enter password" required>
+                    </div>
+                    <button type="submit" class="btn">Login</button>
+                </form>
+            </div>
 
-    <div id="dashboard-container" style="display: none;">
-        <h1>Dashboard</h1>
-        <button id="logout-button">Logout</button>
-        <h2>Orders</h2>
-        <table id="orders-table">
-            <thead>
-                <tr>
-                    <th>Order ID</th>
-                    <th>Customer Name</th>
-                    <th>Total Amount</th>
-                    <th>Site URL</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Order rows will be inserted here -->
-            </tbody>
-        </table>
-    </div>
-
-    <div id="order-details-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h2>Order Details</h2>
-            <div id="modal-order-details"></div>
+            <!-- Dashboard Container -->
+            <div id="dashboard-container" style="display:none;">
+                <nav class="navbar">
+                    <div class="navbar-section">
+                        <div id="api-key-section" class="api-key-group">
+                            <h3>API Key:</h3>
+                            <input type="text" id="api-key-input" readonly>
+                            <button id="copy-api-key" class="btn">Copy API Key</button>
+                        </div>
+                    </div>
+                    <div class="navbar-section">
+                        <button id="logout-button" class="btn">Logout</button>
+                    </div>
+                </nav>
+                <h2>Orders Dashboard</h2>
+                <table id="orders-table" class="table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer Name</th>
+                            <th>Total Amount</th>
+                            <th>Site URL</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Orders will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <script src="admin.js"></script>
+    <!-- Order Details Modal -->
+    <div id="order-details-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Order Details</h2>
+            <div id="modal-order-details">
+                <!-- Details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/admin/admin.js"></script>
 </body>
 </html>

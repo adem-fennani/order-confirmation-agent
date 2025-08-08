@@ -1,68 +1,215 @@
-body {
-    font-family: Arial, sans-serif;
+
+* {
     margin: 0;
     padding: 0;
-    background-color: #f4f4f4;
+    box-sizing: border-box;
 }
 
-#login-container, #dashboard-container {
-    width: 80%;
-    margin: 40px auto;
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #FF9800 0%, #FFC107 50%, #FF5722 100%);
+    min-height: 100vh;
     padding: 20px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    color: #333;
 }
 
-input {
-    width: 100%;
-    padding: 10px;
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    overflow: hidden;
+}
+
+.header {
+    background: linear-gradient(135deg, #FF9800 0%, #FFC107 50%, #FF5722 100%);
+    color: white;
+    padding: 20px;
+    text-align: center;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+}
+
+.header h1 {
+    font-size: 2rem;
     margin-bottom: 10px;
-    border-radius: 4px;
-    border: 1px solid #ddd;
+    font-weight: 800;
+    letter-spacing: 0.06em;
 }
 
-button {
+.main-content {
+    padding: 20px;
+}
+
+#login-container,
+#dashboard-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.login-form {
+    background: #f8f9fa;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.login-form h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #FF5722;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #FF5722;
+}
+
+.form-group input {
     width: 100%;
     padding: 10px;
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+    color: black;
+    font-weight: 400;
 }
 
-#orders-table {
+.btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #FF9800 0%, #FFC107 100%);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    background: linear-gradient(135deg, #FF5722 0%, #FF9800 100%);
+}
+
+#dashboard-container h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #FF5722;
+}
+
+.table {
     width: 100%;
     border-collapse: collapse;
+    margin-bottom: 20px;
 }
 
-#orders-table th, #orders-table td {
-    padding: 10px;
-    border: 1px solid #ddd;
+.table th,
+.table td {
+    padding: 12px;
+    border: 2px solid #e9ecef;
     text-align: left;
 }
 
+.table th {
+    background: #f8f9fa;
+    font-weight: bold;
+    color: #FF5722;
+}
+
 .modal {
+    display: none;
     position: fixed;
-    top: 0;
+    z-index: 1;
     left: 0;
+    top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
 }
 
 .modal-content {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: #fff;
+    background-color: #fefefe;
+    margin: 15% auto;
     padding: 20px;
-    border-radius: 8px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 600px;
+    border-radius: 10px;
 }
 
 .close-button {
+    color: #aaa;
     float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
     cursor: pointer;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 5px; /* Make it more rectangular */
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: white;
+    background: linear-gradient(135deg, #FF9800 0%, #FFC107 100%);
+    border: none; /* Remove border */
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.navbar-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.api-key-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.api-key-group h3 {
+    color: #FF5722;
+    font-size: 1rem;
+    white-space: nowrap;
+    margin: 0; /* Remove default margin */
+    display: inline-flex; /* Make it behave like an inline element */
+    align-items: center; /* Align text vertically if needed */
+}
+
+.api-key-group input[type="text"] {
+    width: 250px;
+    padding: 8px;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+}
+
+.navbar-section .btn {
+    width: auto;
+    padding: 8px 15px;
+    font-size: 0.9rem;
 }
