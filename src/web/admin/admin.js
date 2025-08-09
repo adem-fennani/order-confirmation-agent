@@ -14,6 +14,7 @@ class AdminApp {
         this.dashboardUsernameElement = document.getElementById('dashboard-username');
         this.passwordField = document.getElementById('password');
         this.passwordToggle = document.getElementById('password-toggle');
+        this.revenueDisplay = document.getElementById('revenue-display');
 
         this.bindEvents();
         this.showLogin(); // Always show login page first
@@ -98,10 +99,12 @@ class AdminApp {
 
     renderOrders(orders) {
         this.ordersTableBody.innerHTML = '';
+        let totalAmount = 0;
         orders.forEach(order => {
             const row = document.createElement('tr');
             row.dataset.orderId = order.id;
             const formattedAmount = parseFloat(order.total_amount).toFixed(3);
+            totalAmount += parseFloat(order.total_amount);
             row.innerHTML = `
                 <td>${order.id}</td>
                 <td>${order.customer_name}</td>
@@ -111,6 +114,7 @@ class AdminApp {
             `;
             this.ordersTableBody.appendChild(row);
         });
+        this.revenueDisplay.textContent = `Revenue: ${totalAmount.toFixed(3)}`;
     }
 
     async handleOrderClick(event) {
