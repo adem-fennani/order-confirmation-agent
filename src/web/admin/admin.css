@@ -38,6 +38,24 @@ body {
     letter-spacing: 0.06em;
 }
 
+.welcome-message {
+    font-size: 1.2rem;
+    margin-top: 10px;
+    display: block;
+}
+
+.navbar-username {
+    font-weight: bold;
+    color: #FF5722;
+    margin-right: 10px;
+}
+
+.navbar-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .main-content {
     padding: 20px;
 }
@@ -80,6 +98,24 @@ body {
     border-radius: 5px;
     color: black;
     font-weight: 400;
+}
+
+.password-group {
+    position: relative;
+}
+
+.password-group input {
+    padding-right: 35px; /* Make space for the toggle icon */
+}
+
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    top: 70%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: #FF5722;
+    font-size: 1.2em;
 }
 
 .btn {

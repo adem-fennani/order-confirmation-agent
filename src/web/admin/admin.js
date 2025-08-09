@@ -11,6 +11,9 @@ class AdminApp {
         this.apiKeyInput = document.getElementById('api-key-input');
         this.copyButton = document.getElementById('copy-api-key');
         this.apiKeySection = document.getElementById('api-key-section');
+        this.dashboardUsernameElement = document.getElementById('dashboard-username');
+        this.passwordField = document.getElementById('password');
+        this.passwordToggle = document.getElementById('password-toggle');
 
         this.bindEvents();
         this.showLogin(); // Always show login page first
@@ -22,6 +25,7 @@ class AdminApp {
         this.closeButton.addEventListener('click', () => this.modal.style.display = 'none');
         this.ordersTableBody.addEventListener('click', this.handleOrderClick.bind(this));
         this.copyButton.addEventListener('click', this.copyApiKey.bind(this));
+        this.passwordToggle.addEventListener('click', this.togglePasswordVisibility.bind(this));
     }
 
     async handleLogin(event) {
@@ -37,7 +41,8 @@ class AdminApp {
             });
 
             if (response.ok) {
-                this.showDashboard();
+                const data = await response.json();
+                this.showDashboard(data.username);
                 this.fetchOrders();
                 this.fetchApiKey();
             } else {
@@ -68,9 +73,12 @@ class AdminApp {
         this.dashboardContainer.style.display = 'none';
     }
 
-    showDashboard() {
+    showDashboard(username) {
         this.loginContainer.style.display = 'none';
         this.dashboardContainer.style.display = 'block';
+        if (username) {
+            this.dashboardUsernameElement.textContent = `Welcome, ${username}`;
+        }
     }
 
     async fetchOrders() {
@@ -167,6 +175,16 @@ class AdminApp {
         } catch (err) {
             console.error('Failed to copy API key:', err);
             alert('Failed to copy API Key.');
+        }
+    }
+
+    togglePasswordVisibility() {
+        if (this.passwordField.type === 'password') {
+            this.passwordField.type = 'text';
+            this.passwordToggle.textContent = '🙈'; // Closed eye
+        } else {
+            this.passwordField.type = 'password';
+            this.passwordToggle.textContent = '👁️'; // Open eye
         }
     }
 }

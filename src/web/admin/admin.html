@@ -6,7 +6,7 @@
     <title>Admin Portal</title>
     <link rel="stylesheet" href="/static/admin/admin.css">
     <link href="https://fonts.googleapis.com/css?family=Inter:400,600,700&display=swap" rel="stylesheet">
-</head>
+    </head>
 <body>
     <div class="container">
         <div class="header">
@@ -14,6 +14,8 @@
             <p>Manage your orders and settings</p>
         </div>
         <div class="main-content">
+            
+
             <!-- Login Container -->
             <div id="login-container">
                 <form id="login-form" class="login-form">
@@ -22,9 +24,10 @@
                         <label for="username">Username</label>
                         <input type="text" id="username" name="username" placeholder="Enter username" required>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group password-group">
                         <label for="password">Password</label>
                         <input type="password" id="password" name="password" placeholder="Enter password" required>
+                        <span class="password-toggle" id="password-toggle">👁️</span>
                     </div>
                     <button type="submit" class="btn">Login</button>
                 </form>
@@ -32,6 +35,7 @@
 
             <!-- Dashboard Container -->
             <div id="dashboard-container" style="display:none;">
+                
                 <nav class="navbar">
                     <div class="navbar-section">
                         <div id="api-key-section" class="api-key-group">
@@ -41,6 +45,7 @@
                         </div>
                     </div>
                     <div class="navbar-section">
+                        <span id="dashboard-username" class="navbar-username"></span>
                         <button id="logout-button" class="btn">Logout</button>
                     </div>
                 </nav>
