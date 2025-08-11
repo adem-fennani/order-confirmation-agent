@@ -11,7 +11,7 @@ class Agent {
     }
 
     init() {
-        this.initModeSelector();
+        // this.initModeSelector();
         this.initEventListeners();
         this.loadOrders();
     }
@@ -43,8 +43,9 @@ class Agent {
 
     async loadOrders() {
         try {
-            const response = await fetch('/api/orders');
-            this.orders = await response.json();
+            const response = await fetch('/orders');
+            const data = await response.json();
+            this.orders = data.orders;
             this.renderOrders();
         } catch (error) {
             console.error('Error loading orders:', error);

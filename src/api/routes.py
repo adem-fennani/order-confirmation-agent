@@ -21,7 +21,7 @@ router = APIRouter()
 @router.get("/orders")
 async def get_orders(db=Depends(get_db_interface)):
     orders = []
-    async with db.Session() as session:
+    async with db.AsyncSession() as session:
         result = await session.execute(select(OrderModel))
         db_orders = result.scalars().all()
         for order in db_orders:
@@ -31,6 +31,9 @@ async def get_orders(db=Depends(get_db_interface)):
                     items = json.loads(items)
                 except Exception:
                     items = []
+            
+            conversation = await db.get_conversation(order.id)
+            
             orders.append({
                 "id": order.id,
                 "customer_name": order.customer_name,
@@ -40,7 +43,8 @@ async def get_orders(db=Depends(get_db_interface)):
                 "status": order.status,
                 "created_at": order.created_at,
                 "confirmed_at": order.confirmed_at,
-                "notes": order.notes
+                "notes": order.notes,
+                "conversation": conversation['messages'] if conversation else []
             })
     return {"orders": orders}
 
