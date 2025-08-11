@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 import json
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import select
+from sqlalchemy import select, func
 from src.services.twilio_service import send_sms
 from src.services.facebook_service import FacebookService
 from twilio.twiml.messaging_response import MessagingResponse
@@ -19,11 +19,18 @@ import os
 router = APIRouter()
 
 @router.get("/orders")
-async def get_orders(db=Depends(get_db_interface)):
+async def get_orders(db=Depends(get_db_interface), skip: int = 0, limit: int = 10):
     orders = []
     async with db.AsyncSession() as session:
-        result = await session.execute(select(OrderModel))
+        
+        # Get total count
+        count_result = await session.execute(select(func.count(OrderModel.id)))
+        total_count = count_result.scalar_one()
+
+        # Get paginated orders
+        result = await session.execute(select(OrderModel).offset(skip).limit(limit))
         db_orders = result.scalars().all()
+        
         for order in db_orders:
             items = order.items
             if isinstance(items, str):
@@ -46,7 +53,7 @@ async def get_orders(db=Depends(get_db_interface)):
                 "notes": order.notes,
                 "conversation": conversation['messages'] if conversation else []
             })
-    return {"orders": orders}
+    return {"orders": orders, "total_count": total_count}
 
 @router.get("/orders/{order_id}")
 async def get_order(order_id: str, db=Depends(get_db_interface)):

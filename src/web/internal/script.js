@@ -7,6 +7,9 @@ class Agent {
         this.mode = 'auto'; // 'auto' or 'manual'
         this.orders = [];
         this.selectedOrder = null;
+        this.currentPage = 1;
+        this.itemsPerPage = 5;
+        this.totalOrders = 0;
         this.init();
     }
 
@@ -39,27 +42,56 @@ class Agent {
     initEventListeners() {
         document.getElementById('add-order-form').addEventListener('submit', this.addOrder.bind(this));
         document.getElementById('chat-input').addEventListener('submit', this.sendMessage.bind(this));
+        document.getElementById('prev-page').addEventListener('click', this.prevPage.bind(this));
+        document.getElementById('next-page').addEventListener('click', this.nextPage.bind(this));
     }
 
     async loadOrders() {
+        const skip = (this.currentPage - 1) * this.itemsPerPage;
         try {
-            const response = await fetch('/orders');
+            const response = await fetch(`/orders?skip=${skip}&limit=${this.itemsPerPage}`);
             const data = await response.json();
             this.orders = data.orders;
+            this.totalOrders = data.total_count;
             this.renderOrders();
+            this.renderPagination();
         } catch (error) {
             console.error('Error loading orders:', error);
         }
     }
 
     renderOrders() {
-        const sidebar = document.querySelector('.sidebar');
-        sidebar.innerHTML = ''; // Clear existing orders
+        const ordersList = document.getElementById('orders-list');
+        ordersList.innerHTML = ''; // Clear existing orders
 
         this.orders.forEach(order => {
             const orderCard = this.createOrderCard(order);
-            sidebar.appendChild(orderCard);
+            ordersList.appendChild(orderCard);
         });
+    }
+
+    renderPagination() {
+        const pageInfo = document.getElementById('page-info');
+        const totalPages = Math.ceil(this.totalOrders / this.itemsPerPage);
+        pageInfo.textContent = `Page ${this.currentPage} of ${totalPages}`;
+
+        document.getElementById('prev-page').disabled = this.currentPage === 1;
+        document.getElementById('next-page').disabled = this.currentPage === totalPages;
+    }
+
+    prevPage() {
+        if (this.currentPage > 1) {
+            this.currentPage--;
+            this.loadOrders();
+        }
+    }
+
+    nextPage() {
+        const totalPages = Math.ceil(this.totalOrders / this.itemsPerPage);
+        if (this.currentPage < totalPages) {
+            this.currentPage++;
+            this.loadOrders();
+        }
     }
 
     createOrderCard(order) {
@@ -75,7 +107,7 @@ class Agent {
                 <div class="customer-name">${order.customer_name}</div>
                 <div class="customer-phone">${order.customer_phone}</div>
             </div>
-            <div class="order-total">$${order.total_amount.toFixed(2)}</div>
+            <div class="order-total">${order.total_amount.toFixed(2)}</div>
         `;
         card.addEventListener('click', () => this.selectOrder(order.id));
         return card;
