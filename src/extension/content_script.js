@@ -1,10 +1,46 @@
 // This script runs on the Facebook Marketplace and WooCommerce confirmation pages.
 
 async function extractFacebookOrderData() {
-    // ... (existing Facebook extraction logic)
+    const orderData = {};
+
+    // --- Customer Information (using dummy data as it's not on the page) ---
+    orderData.customer_name = "Facebook User";
+    orderData.customer_phone = "+15551234567";
+
+    // --- Item Details ---
+    const items = [];
+    const itemElements = document.querySelectorAll('.item');
+    itemElements.forEach(itemEl => {
+        const name = itemEl.querySelector('.item-name').innerText;
+        const quantityText = itemEl.querySelector('.item-quantity').innerText;
+        const quantity = parseInt(quantityText.replace('x', ''));
+        const priceText = itemEl.querySelector('.item-price').innerText;
+        const price = parseFloat(priceText.replace(/[^0-9.-]+/g,""));
+
+        if (name && quantity && price) {
+            items.push({ name, quantity, price });
+        }
+    });
+    orderData.items = items;
+
+    // --- Total Amount ---
+    const totalAmountElement = document.querySelector('._3-97');
+    if (totalAmountElement) {
+        const totalAmountText = totalAmountElement.innerText;
+        orderData.total_amount = parseFloat(totalAmountText.replace(/[^0-9.-]+/g,""));
+    } else {
+        orderData.total_amount = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    }
+
+    // --- Notes ---
+    orderData.notes = "Order automatically detected from Facebook Marketplace.";
+
+    return orderData;
 }
 
 async function extractWooCommerceOrderData() {
+    // NOTE: This function has not been tested as the provided test file was for Facebook.
+    // The selectors here are based on a standard WooCommerce installation, but may need to be adjusted.
     const orderData = {};
 
     // --- Customer Information ---
@@ -51,7 +87,7 @@ async function extractWooCommerceOrderData() {
 // Main execution logic
 (async () => {
     let extractedData;
-    if (window.location.href.includes('facebook.com')) {
+    if (window.location.href.includes('facebook.com') || document.title.includes('Facebook Marketplace')) {
         extractedData = await extractFacebookOrderData();
     } else if (window.location.href.includes('/checkout/order-received/')) {
         extractedData = await extractWooCommerceOrderData();

@@ -25,7 +25,7 @@
         "https://www.facebook.com/marketplace/checkout/done/*",
         "https://www.facebook.com/marketplace/orders/*/receipt/*",
         "http://localhost:8080/*",
-        "*/checkout/order-received/*"
+        "*://*/checkout/order-received/*"
       ],
       "js": ["content_script.js"]
     }

@@ -110,8 +110,8 @@ async def facebook_webhook(request: Request):
                     logger.info(f"Received message from hardcoded PSID {sender_id}: {message_text}")
                     
                     # Get agent and db instances
-                    agent = get_agent()
-                    db = get_db_interface()
+                    db: DatabaseInterface = get_db_interface()
+                    agent: OrderConfirmationAgent = await get_agent(db)
 
                     # Find the most recent pending order (temporary workaround for hardcoded PSID)
                     # In a real scenario, you'd link PSID to an order in your DB

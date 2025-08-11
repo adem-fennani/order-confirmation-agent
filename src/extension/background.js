@@ -1,20 +1,36 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "sendOrderData") {
         chrome.storage.sync.get(['apiKey', 'siteId'], (items) => {
-            const orderData = {
-                ...request.orderData,
-                site_id: items.siteId
+            const { customer_name, customer_phone, ...order_data_rest } = request.orderData;
+
+            const submissionData = {
+                site_id: items.siteId,
+                site_url: sender.tab.url,
+                order_data: {
+                    items: order_data_rest.items,
+                    total_amount: order_data_rest.total_amount,
+                    notes: order_data_rest.notes
+                },
+                customer_info: {
+                    customer_name: customer_name,
+                    customer_phone: customer_phone
+                }
             };
 
-            fetch("http://localhost:8000/api/orders/submit", {
+            fetch("http://localhost:8000/orders/submit", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "X-API-Key": items.apiKey
                 },
-                body: JSON.stringify(orderData)
+                body: JSON.stringify(submissionData)
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.detail) });
+                }
+                return response.json();
+            })
             .then(data => {
                 console.log("Order created successfully:", data);
                 sendResponse({ status: "success", data: data });
