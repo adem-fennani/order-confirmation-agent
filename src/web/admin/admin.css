@@ -1,4 +1,3 @@
-
 * {
     margin: 0;
     padding: 0;
@@ -248,4 +247,23 @@ body {
     width: auto;
     padding: 8px 15px;
     font-size: 0.9rem;
+}
+
+#pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+    gap: 15px; /* Space between buttons and page info */
+}
+
+#pagination-controls button.btn {
+    width: 100px; /* Smaller fixed width */
+    padding: 8px 10px; /* Adjust padding */
+    font-size: 0.9rem;
+}
+
+#page-info {
+    font-weight: bold;
+    color: #FF5722;
 }

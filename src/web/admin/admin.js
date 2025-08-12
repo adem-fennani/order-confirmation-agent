@@ -1,5 +1,6 @@
 class AdminApp {
     constructor() {
+        console.log('AdminApp constructor called. Version 2.0');
         this.loginForm = document.getElementById('login-form');
         this.loginContainer = document.getElementById('login-container');
         this.dashboardContainer = document.getElementById('dashboard-container');
@@ -15,6 +16,14 @@ class AdminApp {
         this.passwordField = document.getElementById('password');
         this.passwordToggle = document.getElementById('password-toggle');
         this.revenueDisplay = document.getElementById('revenue-display');
+        this.paginationControls = document.getElementById('pagination-controls');
+        this.prevButton = document.getElementById('prev-page');
+        this.nextButton = document.getElementById('next-page');
+        this.pageInfo = document.getElementById('page-info');
+
+        this.orders = [];
+        this.currentPage = 1;
+        this.ordersPerPage = 7;
 
         this.bindEvents();
         this.showLogin(); // Always show login page first
@@ -27,6 +36,8 @@ class AdminApp {
         this.ordersTableBody.addEventListener('click', this.handleOrderClick.bind(this));
         this.copyButton.addEventListener('click', this.copyApiKey.bind(this));
         this.passwordToggle.addEventListener('click', this.togglePasswordVisibility.bind(this));
+        this.prevButton.addEventListener('click', () => this.changePage(-1));
+        this.nextButton.addEventListener('click', () => this.changePage(1));
     }
 
     async handleLogin(event) {
@@ -87,8 +98,8 @@ class AdminApp {
             const response = await fetch('/api/business/orders');
 
             if (response.ok) {
-                const orders = await response.json();
-                this.renderOrders(orders);
+                this.orders = await response.json();
+                this.renderOrders();
             } else {
                 console.error('Failed to fetch orders');
             }
@@ -97,10 +108,17 @@ class AdminApp {
         }
     }
 
-    renderOrders(orders) {
+    renderOrders() {
+        console.log('renderOrders called. Current page:', this.currentPage, 'Orders per page:', this.ordersPerPage, 'Total orders:', this.orders.length);
         this.ordersTableBody.innerHTML = '';
         let totalAmount = 0;
-        orders.forEach(order => {
+
+        const reversedOrders = [...this.orders].reverse();
+        const startIndex = (this.currentPage - 1) * this.ordersPerPage;
+        const endIndex = startIndex + this.ordersPerPage;
+        const paginatedOrders = reversedOrders.slice(startIndex, endIndex);
+
+        paginatedOrders.forEach(order => {
             const row = document.createElement('tr');
             row.dataset.orderId = order.id;
             const formattedAmount = parseFloat(order.total_amount).toFixed(3);
@@ -114,7 +132,37 @@ class AdminApp {
             `;
             this.ordersTableBody.appendChild(row);
         });
-        this.revenueDisplay.textContent = `Revenue: ${totalAmount.toFixed(3)}`;
+
+        this.revenueDisplay.textContent = `Revenue: ${this.orders.reduce((acc, order) => acc + parseFloat(order.total_amount), 0).toFixed(3)}`;
+        this.updatePaginationControls();
+    }
+
+    updatePaginationControls() {
+        const totalPages = Math.ceil(this.orders.length / this.ordersPerPage);
+        this.pageInfo.textContent = `Page ${this.currentPage} of ${totalPages}`;
+
+        this.prevButton.disabled = this.currentPage === 1;
+        this.nextButton.disabled = this.currentPage === totalPages;
+
+        if (totalPages <= 1) {
+            this.paginationControls.style.display = 'none';
+        } else {
+            this.paginationControls.style.display = 'block';
+        }
+    }
+
+    changePage(direction) {
+        const totalPages = Math.ceil(this.orders.length / this.ordersPerPage);
+        this.currentPage += direction;
+
+        if (this.currentPage < 1) {
+            this.currentPage = 1;
+        }
+        if (this.currentPage > totalPages) {
+            this.currentPage = totalPages;
+        }
+
+        this.renderOrders();
     }
 
     async handleOrderClick(event) {
