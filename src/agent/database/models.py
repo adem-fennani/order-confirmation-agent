@@ -36,6 +36,7 @@ class OrderModel(Base):
     id = Column(String(50), primary_key=True)
     customer_name = Column(String(100), nullable=False)
     customer_phone = Column(String(20), nullable=False)
+    customer_email = Column(String(100), nullable=True)
     items = Column(JSON, nullable=False)
     total_amount = Column(Float, nullable=False)
     status = Column(String(20), default='pending')

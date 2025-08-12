@@ -8,7 +8,7 @@ class Agent {
         this.orders = [];
         this.selectedOrder = null;
         this.currentPage = 1;
-        this.itemsPerPage = 5;
+        this.itemsPerPage = 3;
         this.totalOrders = 0;
         this.init();
     }

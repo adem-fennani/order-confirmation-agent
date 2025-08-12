@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, Depends, Form, Response
+from fastapi import APIRouter, HTTPException, Body, Depends, Form, Response, Request
 from typing import List, Optional, Dict
 from src.agent.models import OrderItem, Order, ConversationState, Message
 from src.agent.database.models import OrderModel, BusinessUser
@@ -28,7 +28,7 @@ async def get_orders(db=Depends(get_db_interface), skip: int = 0, limit: int = 1
         total_count = count_result.scalar_one()
 
         # Get paginated orders
-        result = await session.execute(select(OrderModel).offset(skip).limit(limit))
+        result = await session.execute(select(OrderModel).order_by(OrderModel.created_at.desc()).offset(skip).limit(limit))
         db_orders = result.scalars().all()
         
         for order in db_orders:
@@ -57,7 +57,7 @@ async def get_orders(db=Depends(get_db_interface), skip: int = 0, limit: int = 1
 
 @router.get("/orders/{order_id}")
 async def get_order(order_id: str, db=Depends(get_db_interface)):
-    async with db.Session() as session:
+    async with db.AsyncSession() as session:
         result = await session.execute(select(OrderModel).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
@@ -154,7 +154,7 @@ async def get_conversation(order_id: str, db=Depends(get_db_interface)):
 async def create_order(order: CreateOrder, db=Depends(get_db_interface), agent: Agent = Depends(get_agent)):
     order_id = f"order_{str(uuid.uuid4())[:8]}"
     now = datetime.utcnow()
-    async with db.Session() as session:
+    async with db.AsyncSession() as session:
         new_order = OrderModel(
             id=order_id,
             customer_name=order.customer_name,
@@ -180,6 +180,86 @@ async def create_order(order: CreateOrder, db=Depends(get_db_interface), agent: 
         print(f"ERROR: Failed to send initial confirmation Messenger message to {PSID}: {e}")
 
     return {"id": order_id, "status": "created"}
+
+@router.post("/orders/webhook")
+async def woocommerce_webhook(
+    request: Request,
+    db: DatabaseInterface = Depends(get_db_interface),
+    agent: Agent = Depends(get_agent)
+):
+    """Handle WooCommerce webhook for new orders"""
+    try:
+        # Get the raw body first for debugging
+        body = await request.body()
+        print(f"DEBUG: Received webhook body: {body.decode()}")
+
+        # If the body is empty or a test webhook, handle it gracefully.
+        if not body or body == b'webhook_id=1':
+            print(f"INFO: Received test webhook request: {body.decode()}. Returning success.")
+            return {"status": "test_webhook_received"}
+
+        # Now, parse the JSON from the body
+        webhook_data = json.loads(body)
+        
+        print(f"DEBUG: Received WooCommerce webhook: {webhook_data}")
+        
+        # Extract order information from WooCommerce format
+        order_id = f"woo_order_{webhook_data.get('id')}"
+        customer_name = f"{webhook_data.get('billing', {}).get('first_name', '')} {webhook_data.get('billing', {}).get('last_name', '')}"
+        customer_phone = webhook_data.get('billing', {}).get('phone', '')
+        customer_email = webhook_data.get('billing', {}).get('email', '')
+        
+        # Convert WooCommerce line items to your format
+        items = []
+        for item in webhook_data.get('line_items', []):
+            items.append({
+                "name": item.get('name'),
+                "quantity": item.get('quantity'),
+                "price": float(item.get('price', 0)),
+                "total": float(item.get('total', 0))
+            })
+        
+        total_amount = float(webhook_data.get('total', 0))
+        
+        # Create order in your system
+        new_order_data = {
+            "id": order_id,
+            "customer_name": customer_name.strip(),
+            "customer_phone": customer_phone,
+            "customer_email": customer_email,
+            "items": items,
+            "total_amount": total_amount,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat(),
+            "confirmed_at": None,
+            "notes": f"WooCommerce Order #{webhook_data.get('id')}",
+            "woocommerce_order_id": webhook_data.get('id'),  # Store original WooCommerce ID
+            "site_url": "ai-agent-test.local"  # Your local WooCommerce site
+        }
+        
+        await db.create_order(new_order_data)
+        
+        print(f"DEBUG: Created order in system: {order_id}")
+        
+        # Trigger AI agent conversation
+        try:
+            initial_response = await agent.start_conversation(order_id, language="fr")
+            
+            # Send via Messenger (using your existing logic)
+            PSID = os.environ.get("FACEBOOK_PSID")
+            if PSID:
+                facebook_service = FacebookService()
+                await facebook_service.send_message(recipient_id=PSID, message_text=initial_response)
+                print(f"DEBUG: Sent Messenger message to {PSID}")
+                
+        except Exception as e:
+            print(f"ERROR: Failed to send initial confirmation message: {e}")
+        
+        return {"status": "success", "order_id": order_id}
+        
+    except Exception as e:
+        print(f"ERROR processing WooCommerce webhook: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process webhook")
 
 @router.post("/orders/submit", response_model=OrderSchema)
 async def submit_order(
@@ -238,7 +318,7 @@ async def submit_order(
 
 @router.delete("/orders/{order_id}")
 async def delete_order(order_id: str, db=Depends(get_db_interface)):
-    async with db.Session() as session:
+    async with db.AsyncSession() as session:
         result = await session.execute(select(OrderModel).filter_by(id=order_id))
         order = result.scalars().first()
         if not order:
@@ -250,7 +330,7 @@ async def delete_order(order_id: str, db=Depends(get_db_interface)):
 
 @router.put("/orders/{order_id}")
 async def update_order(order_id: str, order: dict = Body(...), db=Depends(get_db_interface)):
-    async with db.Session() as session:
+    async with db.AsyncSession() as session:
         result = await session.execute(select(OrderModel).filter_by(id=order_id))
         db_order = result.scalars().first()
         if not db_order:
