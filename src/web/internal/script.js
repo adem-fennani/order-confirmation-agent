@@ -98,6 +98,14 @@ class Agent {
         const card = document.createElement('div');
         card.className = 'order-card';
         card.dataset.orderId = order.id;
+        
+        let itemsHtml = '';
+        if (order.items && Array.isArray(order.items)) {
+            itemsHtml = order.items.map(item => `
+                <div class="order-item">${item.name} x${item.quantity}</div>
+            `).join('');
+        }
+
         card.innerHTML = `
             <div class="order-header">
                 <div class="order-id">Order #${order.id}</div>
@@ -107,7 +115,10 @@ class Agent {
                 <div class="customer-name">${order.customer_name}</div>
                 <div class="customer-phone">${order.customer_phone}</div>
             </div>
-            <div class="order-total">${order.total_amount.toFixed(2)}</div>
+            <div class="order-items">
+                ${itemsHtml}
+            </div>
+            <div class="order-total">${order.total_amount.toFixed(3)}</div>
         `;
         card.addEventListener('click', () => this.selectOrder(order.id));
         return card;

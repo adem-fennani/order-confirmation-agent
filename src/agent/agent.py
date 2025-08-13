@@ -6,10 +6,12 @@ import json
 import re
 from difflib import get_close_matches
 from src.services.ai_service import call_llm, LLMServiceError
+from src.services.woocommerce_service import WooCommerceService
 
 class OrderConfirmationAgent:
     def __init__(self, db: SQLiteDatabase): 
         self.db = db
+        self.woocommerce_service = WooCommerceService()
 
     def _detect_language(self, text: str) -> str:
         en_words = ['yes', 'no', 'ok', 'correct', 'thanks', 'thank you', 'please', 'order', 'remove', 'add', 'help', 'cancel']
@@ -364,6 +366,15 @@ Exemples :
                         "confirmed_at": datetime.utcnow().isoformat()
                     }
                 )
+
+                # Update WooCommerce order status
+                # Extract original WooCommerce order ID
+                woo_order_id = order_id.replace("woo_order_", "")
+                if woo_order_id.isdigit(): # Ensure it's a valid ID before sending to WC
+                    self.woocommerce_service.update_order_status(int(woo_order_id), "completed")
+                else:
+                    print(f"WARNING: Could not extract valid WooCommerce order ID from {order_id}")
+
                 # Move conversation to final state after confirmation
                 conversation.messages.append({"role": "assistant", "content": final_message})
                 conversation.current_step = "completed"

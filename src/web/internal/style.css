@@ -166,25 +166,29 @@ body {
     text-align: right;
 }
 
+.message.agent {
+    text-align: left; /* Align agent messages to the left */
+}
+
 .message-bubble {
     display: inline-block;
     max-width: 70%;
     padding: 12px 16px;
-    border-radius: 20px;
+    border-radius: 20px; /* Default rounded corners */
     word-wrap: break-word;
 }
 
 .message.user .message-bubble {
     background: linear-gradient(135deg, #4285F4 0%, #66A3FF 100%);
     color: white;
-    border-bottom-right-radius: 5px;
+    border-bottom-right-radius: 5px; /* Pointed corner for user */
 }
 
 .message.agent .message-bubble {
-    background: white;
-    color: #e53e3e;
-    border: 1px solid #e0e6ed;
-    border-bottom-left-radius: 5px;
+    background: red; /* Light grey background for agent */
+    color: #333; /* Darker text color for readability */
+    border: none; /* Remove border */
+    border-bottom-left-radius: 5px; /* Pointed corner for agent */
 }
 
 .system-message {

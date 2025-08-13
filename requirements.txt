@@ -11,3 +11,4 @@ google-generativeai
 twilio
 passlib[bcrypt]
 python-jose[cryptography]
+woocommerce
