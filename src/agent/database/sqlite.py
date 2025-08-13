@@ -53,6 +53,7 @@ class SQLiteDatabase(DatabaseInterface):
                     "created_at": order.created_at.isoformat(),
                     "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
                     "notes": order.notes,
+                    "woocommerce_order_id": order.woocommerce_order_id,
                     "business_id": order.business_id,
                     "site_url": order.site_url,
                     "site_id": order.site_id
@@ -98,6 +99,7 @@ class SQLiteDatabase(DatabaseInterface):
                     "created_at": order.created_at.isoformat(),
                     "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
                     "notes": order.notes,
+                    "woocommerce_order_id": order.woocommerce_order_id,
                     "business_id": order.business_id,
                     "site_url": order.site_url,
                     "site_id": order.site_id
@@ -192,6 +194,7 @@ class SQLiteDatabase(DatabaseInterface):
                     "created_at": order.created_at.isoformat(),
                     "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
                     "notes": order.notes,
+                    "woocommerce_order_id": order.woocommerce_order_id,
                     "business_id": order.business_id,
                     "site_url": order.site_url,
                     "site_id": order.site_id
@@ -235,6 +238,7 @@ class SQLiteDatabase(DatabaseInterface):
                     "created_at": order.created_at.isoformat(),
                     "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
                     "notes": order.notes,
+                    "woocommerce_order_id": order.woocommerce_order_id,
                     "business_id": order.business_id,
                     "site_url": order.site_url,
                     "site_id": order.site_id
@@ -265,6 +269,7 @@ class SQLiteDatabase(DatabaseInterface):
                     "created_at": order.created_at.isoformat(),
                     "confirmed_at": order.confirmed_at.isoformat() if order.confirmed_at else None,
                     "notes": order.notes,
+                    "woocommerce_order_id": order.woocommerce_order_id,
                     "business_id": order.business_id,
                     "site_url": order.site_url,
                     "site_id": order.site_id

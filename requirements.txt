@@ -12,3 +12,4 @@ twilio
 passlib[bcrypt]
 python-jose[cryptography]
 woocommerce
+python-dotenv

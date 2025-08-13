@@ -224,13 +224,17 @@ async def woocommerce_webhook(
         
         # Convert WooCommerce line items to your format
         items = []
-        for item in webhook_data.get('line_items', []):
-            items.append({
-                "name": item.get('name'),
-                "quantity": item.get('quantity'),
-                "price": float(item.get('price', 0)),
-                "total": float(item.get('total', 0))
-            })
+        for item_data in webhook_data.get('line_items', []):
+            # Explicitly create OrderItem instances to ensure correct field mapping
+            order_item = OrderItem(
+                name=item_data.get('name'),
+                quantity=item_data.get('quantity'),
+                price=float(item_data.get('price', 0)),
+                notes=None, # WooCommerce webhook doesn't provide notes for line items
+                woo_line_item_id=item_data.get('id'),
+                product_id=item_data.get('product_id')
+            )
+            items.append(order_item.dict()) # Convert back to dict for storage
         
         total_amount = float(webhook_data.get('total', 0))
         

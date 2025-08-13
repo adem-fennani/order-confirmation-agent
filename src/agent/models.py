@@ -18,6 +18,9 @@ class OrderItem(BaseModel):
     quantity: int
     price: float
     notes: Optional[str] = None
+    woocommerce_order_id: Optional[str] = None # Added for WooCommerce order ID
+    product_id: Optional[int] = None # Added for WooCommerce product ID
+    woo_line_item_id: Optional[int] = None # Added for WooCommerce line item ID
 
 class Order(BaseModel):
     id: str
@@ -30,6 +33,10 @@ class Order(BaseModel):
     confirmed_at: Optional[str] = None
     notes: Optional[str] = None
     delivery_address: Optional[str] = None  # Added for delivery address confirmation step
+    woocommerce_order_id: Optional[str] = None  # Add this field
+    business_id: Optional[str] = None  # Also add this field as it appears in your logs
+    site_url: Optional[str] = None  # And this one
+    site_id: Optional[str] = None  # And this one
 
     @validator('items', pre=True)
     def parse_items(cls, v):

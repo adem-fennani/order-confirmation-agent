@@ -22,3 +22,27 @@ class WooCommerceService:
         except Exception as e:
             print(f"Error updating WooCommerce order {order_id}: {e}")
             return None
+
+    def update_order_details(self, order_id: int, items: list, total_amount: float):
+        # Construct line_items payload for WooCommerce API
+        wc_line_items = []
+        for item in items:
+            wc_item = {
+                "product_id": item.product_id,
+                "quantity": item.quantity
+            }
+            if item.woo_line_item_id:
+                wc_item["id"] = item.woo_line_item_id
+            wc_line_items.append(wc_item)
+
+        data = {
+            "line_items": wc_line_items,
+            "total": str(total_amount) # WooCommerce expects total as a string
+        }
+        try:
+            response = self.wcapi.put(f"orders/{order_id}", data).json()
+            print(f"WooCommerce order {order_id} details updated.")
+            return response
+        except Exception as e:
+            print(f"Error updating WooCommerce order {order_id} details: {e}")
+            return None

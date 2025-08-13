@@ -111,7 +111,11 @@ class OrderConfirmationAgent:
         order_data = await self.db.get_order(order_id)
         if not order_data:
             return "Désolé, je ne trouve pas cette commande. Pouvez-vous vérifier le numéro de commande?"
+        print(f"DEBUG: order_data before Order Pydantic model: {order_data}")
         order = Order(**order_data)
+        # Explicitly set woocommerce_order_id after Pydantic instantiation
+        if 'woocommerce_order_id' in order_data:
+            order.woocommerce_order_id = str(order_data['woocommerce_order_id'])
         if order.status == "confirmed":
             return "Votre commande a déjà été confirmée. Merci!"
         conversation_data = await self.db.get_conversation(order_id)
@@ -678,6 +682,16 @@ Exemples :
             'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
             'total_amount': sum(item.price * item.quantity for item in order.items)
         })
+
+        # Update WooCommerce order details
+        print(f"DEBUG: Order object in _apply_llm_modification: {order}")
+        print(f"DEBUG: order.woocommerce_order_id: {getattr(order, 'woocommerce_order_id', 'Attribute not found')}")
+        if order.woocommerce_order_id:
+            woo_order_id = int(order.woocommerce_order_id)
+            self.woocommerce_service.update_order_details(woo_order_id, order.items, order.total_amount)
+        else:
+            print(f"WARNING: WooCommerce order ID not found for local order {order_id}. Cannot update WooCommerce details.")
+
         # --- Store last modification in conversation state ---
         # if conversation: # This line is removed as conversation is passed as an argument
         #     conversation.last_modification = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"]) # This line is removed as conversation is passed as an argument
