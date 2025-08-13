@@ -27,17 +27,18 @@ class WooCommerceService:
         # Construct line_items payload for WooCommerce API
         wc_line_items = []
         for item in items:
+            line_item_total = item.price * item.quantity
             wc_item = {
                 "product_id": item.product_id,
-                "quantity": item.quantity
+                "quantity": item.quantity,
+                "total": str(line_item_total)
             }
             if item.woo_line_item_id:
                 wc_item["id"] = item.woo_line_item_id
             wc_line_items.append(wc_item)
 
         data = {
-            "line_items": wc_line_items,
-            "total": str(total_amount) # WooCommerce expects total as a string
+            "line_items": wc_line_items
         }
         try:
             response = self.wcapi.put(f"orders/{order_id}", data).json()

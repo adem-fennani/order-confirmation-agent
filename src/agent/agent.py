@@ -598,20 +598,9 @@ Exemples :
         """Apply the modification as instructed by the LLM. Uses normalized canonical format. Prevents duplicate modifications."""
         norm = self._normalize_modification(modification, action)
         print(f"[NORM] Normalized modification: {norm}")
-        # --- Prevent duplicate modifications ---
-        # conversation_data = await self.db.get_conversation(order_id) # This line is removed as conversation is passed as an argument
-        # if conversation_data: # This line is removed as conversation is passed as an argument
-        #     conversation = ConversationState(**conversation_data) # This line is removed as conversation is passed as an argument
-        #     last_mod = getattr(conversation, 'last_modification', None) # This line is removed as conversation is passed as an argument
-        # Use a tuple for easy comparison
-        current_mod_tuple = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"])
-        # if last_mod == current_mod_tuple: # This line is removed as conversation is passed as an argument
-        #     print(f"[WARN] Duplicate modification detected, skipping: {current_mod_tuple}") # This line is removed as conversation is passed as an argument
-        #     return False # This line is removed as conversation is passed as an argument
-        # else: # This line is removed as conversation is passed as an argument
-        #     conversation = None # This line is removed as conversation is passed as an argument
-        #     last_mod = None # This line is removed as conversation is passed as an argument
+        
         applied = False
+        
         if norm["action"] == "replace" and norm["old_item"] and norm["new_item"]:
             # Always remove the old item completely
             order.items = [i for i in order.items if i.name.lower() != norm["old_item"].lower()]
@@ -635,6 +624,7 @@ Exemples :
                     price=price,
                     notes='Ajouté via LLM (replace)'))
             applied = True
+            
         elif norm["action"] == "add" and norm["new_item"]:
             existing = next((item for item in order.items if item.name.lower() == norm["new_item"].lower()), None)
             if existing:
@@ -655,6 +645,7 @@ Exemples :
                     price=price,
                     notes='Ajouté via LLM (add)'))
             applied = True
+            
         elif norm["action"] == "remove" and norm["old_item"]:
             removed_count = 0
             for item in order.items:
@@ -668,6 +659,7 @@ Exemples :
             applied = True
             # Store removed_count in the object for later use in the confirmation message if needed
             norm["actually_removed"] = removed_count
+            
         elif norm["action"] == "modify" and norm["old_item"] and norm["new_item"] and norm["new_qty"] is not None:
             # Set the quantity of the item directly
             for item in order.items:
@@ -675,27 +667,34 @@ Exemples :
                     item.quantity = norm["new_qty"]
                     applied = True
                     break
+        
         if not applied:
             print(f"[WARN] Could not apply normalized modification: {norm}")
             return False
+        
+        # Calculate the new total amount
+        new_total_amount = sum(item.price * item.quantity for item in order.items)
+        
+        # Update the order object with the new total
+        order.total_amount = new_total_amount
+        
+        # Update database with new total
         await self.db.update_order(order_id, {
             'items': json.dumps([item.dict() if hasattr(item, 'dict') else item for item in order.items]),
-            'total_amount': sum(item.price * item.quantity for item in order.items)
+            'total_amount': new_total_amount
         })
 
-        # Update WooCommerce order details
+        # Update WooCommerce order details with the correct total
         print(f"DEBUG: Order object in _apply_llm_modification: {order}")
         print(f"DEBUG: order.woocommerce_order_id: {getattr(order, 'woocommerce_order_id', 'Attribute not found')}")
+        print(f"DEBUG: new_total_amount: {new_total_amount}")
+        
         if order.woocommerce_order_id:
             woo_order_id = int(order.woocommerce_order_id)
-            self.woocommerce_service.update_order_details(woo_order_id, order.items, order.total_amount)
+            self.woocommerce_service.update_order_details(woo_order_id, order.items, new_total_amount)
         else:
             print(f"WARNING: WooCommerce order ID not found for local order {order_id}. Cannot update WooCommerce details.")
 
-        # --- Store last modification in conversation state ---
-        # if conversation: # This line is removed as conversation is passed as an argument
-        #     conversation.last_modification = (norm["action"], norm["old_item"], norm["new_item"], norm["old_qty"], norm["new_qty"]) # This line is removed as conversation is passed as an argument
-        #     await self.db.update_conversation(order_id, conversation.dict()) # This line is removed as conversation is passed as an argument
         return True
 
     async def process_message_basic(self, order_id: str, user_input: str) -> str:
