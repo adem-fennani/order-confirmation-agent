@@ -18,7 +18,7 @@ db = SQLiteDatabase()
 client = TestClient(app)
 
 # Helper to create a new order
-def create_order(items, customer_name="Test User", customer_phone="+1234567890", total_amount=100.0, notes=""):
+def create_order(items, customer_name="Test User", customer_phone="+1234567890", total_amount=100.0, notes="", woocommerce_order_id=None):
     import uuid
     order_id = str(uuid.uuid4())
     order_data = {
@@ -32,9 +32,10 @@ def create_order(items, customer_name="Test User", customer_phone="+1234567890",
         "notes": notes,
         "confirmed_at": None,
         "delivery_address": None,
+        "woocommerce_order_id": woocommerce_order_id
     }
     async def _insert():
-        async with db.Session() as session:
+        async with db.AsyncSession() as session:
             order = OrderModel(**order_data)
             session.add(order)
             await session.commit()
@@ -47,7 +48,7 @@ def test_basic_order_confirmation_french():
     order_id = create_order([
         {"name": "Chaise", "quantity": 2, "price": 10.0},
         {"name": "Table", "quantity": 2, "price": 20.0}
-    ], customer_name="Jean", customer_phone="+33123456789")
+    ], customer_name="Jean", customer_phone="+33123456789", woocommerce_order_id="999")
     # Start confirmation (simulate frontend call)
     resp = client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     assert resp.status_code == 200
@@ -76,7 +77,7 @@ def test_basic_order_confirmation_english():
     order_id = create_order([
         {"name": "Chair", "quantity": 2, "price": 10.0},
         {"name": "Table", "quantity": 2, "price": 20.0}
-    ], customer_name="John", customer_phone="+441234567890")
+    ], customer_name="John", customer_phone="+441234567890", woocommerce_order_id="999")
     resp = client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     assert resp.status_code == 200
     assert "john" in resp.json()["message"].lower() or ("chair" in resp.json()["message"].lower() and "table" in resp.json()["message"].lower())
@@ -103,7 +104,7 @@ def test_remove_item_english():
     order_id = create_order([
         {"name": "Chair", "quantity": 2, "price": 10.0},
         {"name": "Table", "quantity": 2, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "I want to remove the chairs from the order"})
     response = resp.json()["agent_response"].lower()
@@ -125,7 +126,7 @@ def test_remove_item_french():
     order_id = create_order([
         {"name": "Chaise", "quantity": 2, "price": 10.0},
         {"name": "Table", "quantity": 2, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Je veux supprimer les chaises de la commande"})
     response = resp.json()["agent_response"].lower()
@@ -145,7 +146,7 @@ def test_add_existing_item_english():
     order_id = create_order([
         {"name": "Table", "quantity": 2, "price": 20.0},
         {"name": "Chair", "quantity": 1, "price": 10.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Add 3 more chairs"})
     response = resp.json()["agent_response"].lower()
@@ -165,7 +166,7 @@ def test_add_existing_item_french():
     order_id = create_order([
         {"name": "Table", "quantity": 2, "price": 20.0},
         {"name": "Chaise", "quantity": 1, "price": 10.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Ajouter 3 chaises de plus"})
     response = resp.json()["agent_response"].lower()
@@ -185,7 +186,7 @@ def test_replace_item_english():
     order_id = create_order([
         {"name": "Pizza", "quantity": 2, "price": 12.0},
         {"name": "Lasagna", "quantity": 2, "price": 14.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Replace lasagna with salad"})
     response = resp.json()["agent_response"].lower()
@@ -206,7 +207,7 @@ def test_replace_item_french():
     order_id = create_order([
         {"name": "Pizza", "quantity": 2, "price": 12.0},
         {"name": "Lasagne", "quantity": 2, "price": 14.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Remplacer lasagne par salade"})
     response = resp.json()["agent_response"].lower()
@@ -226,7 +227,7 @@ def test_modify_quantity_english():
     """Test modifying item quantity in English."""
     order_id = create_order([
         {"name": "Table", "quantity": 2, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Change the number of tables to 5"})
     response = resp.json()["agent_response"].lower()
@@ -244,7 +245,7 @@ def test_modify_quantity_french():
     """Test modifying item quantity in French."""
     order_id = create_order([
         {"name": "Table", "quantity": 2, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Changer le nombre de tables à 5"})
     response = resp.json()["agent_response"].lower()
@@ -262,7 +263,7 @@ def test_cancel_order_english():
     """Test cancelling an order in English."""
     order_id = create_order([
         {"name": "Table", "quantity": 1, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "I want to cancel my order"})
     assert resp.status_code == 200
@@ -273,7 +274,7 @@ def test_cancel_order_french():
     """Test cancelling an order in French."""
     order_id = create_order([
         {"name": "Table", "quantity": 1, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Je veux annuler ma commande"})
     response = resp.json()["agent_response"].lower()
@@ -284,7 +285,7 @@ def test_ambiguous_request_english():
     """Test ambiguous/help request in English."""
     order_id = create_order([
         {"name": "Table", "quantity": 1, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Can you help?"})
     assert resp.status_code == 200
@@ -295,7 +296,7 @@ def test_ambiguous_request_french():
     """Test ambiguous/help request in French."""
     order_id = create_order([
         {"name": "Table", "quantity": 1, "price": 20.0}
-    ])
+    ], woocommerce_order_id="999")
     client.post(f"/orders/{order_id}/confirm", json={"mode": "web"})
     resp = client.post(f"/orders/{order_id}/message", json={"text": "Pouvez-vous m'aider ?"})
     assert resp.status_code == 200

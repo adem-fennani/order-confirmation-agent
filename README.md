@@ -2,7 +2,7 @@
 
 ## Overview
 
-Order Confirmation Agent is a modern, AI-powered system for confirming customer orders. It features a browser extension to automatically detect purchases from e-commerce sites (like Facebook Marketplace and WooCommerce) and initiates a confirmation flow via Facebook Messenger, web chat, or SMS. The system leverages FastAPI, a Chrome Extension, and Google Generative AI to provide a seamless, multilingual (French/English) conversational experience for order validation, modification, and final confirmation. It also includes a Business Admin Panel for businesses to manage their orders and API keys.
+Order Confirmation Agent is a modern, AI-powered system for confirming customer orders. It features a browser extension to automatically detect purchases from e-commerce sites (like Facebook Marketplace and WooCommerce) and initiates a confirmation flow via Facebook Messenger, web chat, or SMS. The system leverages FastAPI, a Chrome Extension, and Google Generative AI to provide a seamless, multilingual (French/English) conversational experience for order validation, modification, and final confirmation. It also includes a Business Admin Panel for businesses to manage their orders and API keys, and can update orders directly on the WooCommerce website after agent-customer conversation.
 
 ---
 
@@ -13,15 +13,22 @@ Order Confirmation Agent is a modern, AI-powered system for confirming customer 
 3.  **Order Creation**: The extension sends the scraped data to the backend API, which creates a new order in the database.
 4.  **Automated Confirmation**: Upon order creation, the agent automatically sends a confirmation message to the user via Facebook Messenger.
 5.  **Conversational Agent**: The user interacts with the AI agent on Messenger to confirm, modify, or cancel their order.
-6.  **Status Update**: The order status is updated in the database based on the conversation outcome.
+6.  **Status Update**: The order status is updated in the database based on the conversation outcome, and if the order originated from WooCommerce, the changes are pushed back to the WooCommerce website.
 7.  **Admin Notification**: The order appears in the business owner's admin panel.
 
 ---
 
 ## Features
 
-- **Automated Order Detection**: A browser extension automatically captures order details from e-commerce confirmation pages (Facebook Marketplace and WooCommerce).
+- **Automated Order Detection**: A browser extension automatically captures order details from e-commerce confirmation pages (Facebook Marketplace and WooCommerce). It also supports receiving new orders directly from WooCommerce via webhooks.
+- **WooCommerce Order Synchronization**: Changes made to order items during the conversation (e.g., quantity updates, item removal/addition) are automatically synchronized back to the original WooCommerce order.
 - **Facebook Messenger Integration**: Proactively sends order confirmation messages and handles the conversation on Messenger.
+- **AI-Powered Dialogues**: Uses Google Generative AI for natural, context-aware, multilingual (French/English) conversations.
+- **Multi-channel Support**: Also supports confirmation via a web interface and SMS (Twilio).
+- **Order Management**: A web UI to view, manage, and interact with all orders and conversations.
+- **Business Admin Panel**: A dedicated panel for businesses to manage their orders, API keys, and sites.
+- **Persistent Storage**: Uses a SQLite database to store all order and conversation data.
+- **Extensible & Modular**: Cleanly separates the agent logic, API, external services, and the browser extension.
 - **AI-Powered Dialogues**: Uses Google Generative AI for natural, context-aware, multilingual (French/English) conversations.
 - **Multi-channel Support**: Also supports confirmation via a web interface and SMS (Twilio).
 - **Order Management**: A web UI to view, manage, and interact with all orders and conversations.
@@ -92,6 +99,11 @@ order-confirmation-agent/
     TWILIO_ACCOUNT_SID=...
     TWILIO_AUTH_TOKEN=...
     TWILIO_PHONE_NUMBER=...
+
+    # (Optional) WooCommerce Integration
+    WOOCOMMERCE_STORE_URL=...
+    WOOCOMMERCE_CONSUMER_KEY=...
+    WOOCOMMERCE_CONSUMER_SECRET=...
     ```
 
 4.  **Run the backend server**
@@ -113,11 +125,18 @@ order-confirmation-agent/
 
 ## Usage
 
-1.  With the backend server running, navigate to a test order page (e.g., `http://localhost:8080/test_order.html` served locally).
-2.  The browser extension will automatically detect the order and send it to the backend.
-3.  The backend creates the order and immediately sends a confirmation message to the user specified by `FACEBOOK_PSID` in your `.env` file.
-4.  Open Facebook Messenger to interact with the agent and complete the confirmation.
-5.  Visit the web UI (`http://localhost:8000`) to see the order status update in real-time.
+1.  **For Browser Extension (Facebook Marketplace/WooCommerce)**:
+    - With the backend server running, navigate to an e-commerce site (e.g., Facebook Marketplace, a WooCommerce store) and complete an order.
+    - The browser extension will automatically detect the order details from the confirmation page and send them to the backend.
+2.  **For WooCommerce Webhooks (New Orders)**:
+    - Configure a webhook in your WooCommerce store to send `Order created` events to `http://<your-backend-url>/orders/webhook`.
+    - When a new order is placed on your WooCommerce store, the webhook will trigger, and the backend will create the order in the system.
+3.  **Agent Interaction**:
+    - The backend creates the order and immediately sends a confirmation message to the user (via Facebook Messenger, SMS, or web chat, depending on configuration).
+    - Open Facebook Messenger (or your configured channel) to interact with the agent and confirm, modify, or cancel the order.
+    - If the order originated from WooCommerce, any modifications confirmed with the agent will be automatically pushed back to your WooCommerce store.
+4.  **Monitoring**:
+    - Visit the web UI (`http://localhost:8000`) to see the order status update in real-time.
 
 ---
 
@@ -163,7 +182,8 @@ The `scripts` directory contains utility scripts for managing the application.
 | GET    | /api/business/orders            | Get all orders for authenticated business        |
 | GET    | /api/business/orders/{order_id} | Get specific order details                       |
 | GET    | /api/business/api-key           | Get API key for authenticated business           |
-| POST   | /api/orders/submit              | Submit confirmed order from WooCommerce          |
+| POST   | /orders/webhook                 | Handles incoming webhooks from WooCommerce for new orders |
+| POST   | /api/orders/submit              | Submit confirmed order from WooCommerce or browser extension |
 
 
 ---
@@ -179,6 +199,9 @@ The `scripts` directory contains utility scripts for managing the application.
 | TWILIO_ACCOUNT_SID         | (Optional) Twilio Account SID for SMS functionality.     |
 | TWILIO_AUTH_TOKEN          | (Optional) Twilio Auth Token for SMS functionality.      |
 | TWILIO_PHONE_NUMBER        | (Optional) Your Twilio phone number for sending SMS.     |
+| WOOCOMMERCE_STORE_URL      | (Optional) The URL of your WooCommerce store.            |
+| WOOCOMMERCE_CONSUMER_KEY   | (Optional) Consumer Key for WooCommerce REST API.        |
+| WOOCOMMERCE_CONSUMER_SECRET| (Optional) Consumer Secret for WooCommerce REST API.     |
 
 ---
 
