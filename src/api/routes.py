@@ -212,6 +212,16 @@ async def woocommerce_webhook(
         customer_phone = webhook_data.get('billing', {}).get('phone', '')
         customer_email = webhook_data.get('billing', {}).get('email', '')
         
+        shipping_info = webhook_data.get('shipping', {})
+        delivery_address = ", ".join(filter(None, [
+            shipping_info.get('address_1'),
+            shipping_info.get('address_2'),
+            shipping_info.get('city'),
+            shipping_info.get('state'),
+            shipping_info.get('postcode'),
+            shipping_info.get('country')
+        ]))
+        
         # Convert WooCommerce line items to your format
         items = []
         for item in webhook_data.get('line_items', []):
@@ -236,6 +246,7 @@ async def woocommerce_webhook(
             "created_at": datetime.utcnow().isoformat(),
             "confirmed_at": None,
             "notes": f"WooCommerce Order #{webhook_data.get('id')}",
+            "delivery_address": delivery_address, # Add this line
             "woocommerce_order_id": webhook_data.get('id'),  # Store original WooCommerce ID
             "site_url": "ai-agent-test.local"  # Your local WooCommerce site
         }
