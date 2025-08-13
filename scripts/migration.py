@@ -11,6 +11,7 @@ def migrate():
         id VARCHAR(50) PRIMARY KEY,
         customer_name VARCHAR(100) NOT NULL,
         customer_phone VARCHAR(20) NOT NULL,
+        customer_email VARCHAR(100),
         items TEXT NOT NULL,
         total_amount REAL NOT NULL,
         status VARCHAR(20) DEFAULT 'pending',
@@ -18,6 +19,7 @@ def migrate():
         confirmed_at DATETIME,
         notes TEXT,
         delivery_address TEXT,
+        woocommerce_order_id VARCHAR(100),
         business_id VARCHAR(100),
         site_url VARCHAR(255),
         site_id VARCHAR(100)

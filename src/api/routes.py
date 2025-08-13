@@ -189,17 +189,20 @@ async def woocommerce_webhook(
 ):
     """Handle WooCommerce webhook for new orders"""
     try:
-        # Get the raw body first for debugging
         body = await request.body()
-        print(f"DEBUG: Received webhook body: {body.decode()}")
+        body_str = body.decode('utf-8')
+        print(f"DEBUG: Received webhook body: {body_str}")
 
-        # If the body is empty or a test webhook, handle it gracefully.
-        if not body or body == b'webhook_id=1':
-            print(f"INFO: Received test webhook request: {body.decode()}. Returning success.")
+        # Check for WooCommerce test webhook
+        if "webhook_id=1" in body_str:
+            print("INFO: Received WooCommerce test webhook. Returning success.")
             return {"status": "test_webhook_received"}
 
-        # Now, parse the JSON from the body
-        webhook_data = json.loads(body)
+        if not body_str:
+            print("INFO: Received empty webhook request. Likely a test from WooCommerce.")
+            return {"status": "empty_request"}
+
+        webhook_data = json.loads(body_str)
         
         print(f"DEBUG: Received WooCommerce webhook: {webhook_data}")
         

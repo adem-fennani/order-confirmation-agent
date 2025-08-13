@@ -44,6 +44,7 @@ class OrderModel(Base):
     confirmed_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
     delivery_address = Column(Text, nullable=True)
+    woocommerce_order_id = Column(String(100), nullable=True)
     
     # New columns for Business Admin Panel
     business_id = Column(String(100), nullable=True) # Changed to nullable=True
