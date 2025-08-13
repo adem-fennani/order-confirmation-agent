@@ -84,62 +84,7 @@ class OrderConfirmationAgent:
                         conversation.messages.append({"role": "assistant", "content": confirmation_message})
                         await self.db.update_conversation(order_id, conversation.dict())
                     return confirmation_message
-            if awaiting_confirmation and user_confirms:
-                lang = self._detect_language(user_input)
-                if conversation and not (conversation.current_step == "confirming_address" and getattr(conversation, 'pending_address', None)):
-                    conversation.messages.append({"role": "user", "content": user_input})
-                    conversation.current_step = "confirming_address"
-                    conversation.pending_address = None
-                    if lang.startswith("en"):
-                        address_prompt = "Could you please provide your delivery address?"
-                    else:
-                        address_prompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
-                    conversation.messages.append({"role": "assistant", "content": address_prompt})
-                    await self.db.update_conversation(order_id, conversation.dict())
-                    return address_prompt
-            if conversation and getattr(conversation, 'current_step', None) == "confirming_address":
-                print(f"[DEBUG] Entering confirming_address. pending_address: {conversation.pending_address}, current_step: {conversation.current_step}")
-                address = user_input.strip()
-                lang = self._detect_language(user_input)
-                if address.lower() in ["oui", "yes", "ok", "d'accord", "correct"]:
-                    if conversation.pending_address:
-                        conversation.messages.append({"role": "user", "content": user_input})
-                        await self.db.update_order(order_id, {"delivery_address": conversation.pending_address, "status": "confirmed", "confirmed_at": datetime.utcnow().isoformat()})
-                        if lang.startswith("en"):
-                            response = "Thank you! Your address is confirmed and your order is now being prepared."
-                        self.current_state = AgentState.ORDER_CONFIRMED
-                        conversation.current_step = "completed"
-                        await self.db.update_conversation(order_id, conversation.dict())
-                        return response
-                    else:
-                        if lang.startswith("en"):
-                            reprompt = "Could you please provide your delivery address?"
-                        else:
-                            reprompt = "Pouvez-vous me donner votre adresse de livraison, s'il vous plaît ?"
-                        conversation.messages.append({"role": "user", "content": user_input})
-                        conversation.messages.append({"role": "assistant", "content": reprompt})
-                        await self.db.update_conversation(order_id, conversation.dict())
-                        return reprompt
-                if address.lower() in ["non", "no", "incorrect", "erreur"]:
-                    conversation.messages.append({"role": "user", "content": user_input})
-                    conversation.pending_address = None
-                    if lang.startswith("en"):
-                        reprompt = "Sorry, could you please provide your correct delivery address?"
-                    else:
-                        reprompt = "Désolé, pouvez-vous me donner votre adresse de livraison correcte ?"
-                    conversation.messages.append({"role": "assistant", "content": reprompt})
-                    await self.db.update_conversation(order_id, conversation.dict())
-                    return reprompt
-                conversation.pending_address = address
-                print(f"[DEBUG] pending_address set to: {conversation.pending_address}")
-                conversation.messages.append({"role": "user", "content": user_input})
-                if lang.startswith("en"):
-                    confirm_prompt = f"Just to confirm, is this your delivery address: '{address}'? (yes/no)"
-                else:
-                    confirm_prompt = f"Pour confirmer, est-ce bien votre adresse de livraison : '{address}' ? (oui/non)"
-                conversation.messages.append({"role": "assistant", "content": confirm_prompt})
-                await self.db.update_conversation(order_id, conversation.dict())
-                return confirm_prompt
+            
             
             # For LLM path, let llm_process_message handle appending the user message
             llm_response = await self.llm_process_message(order_id, user_input, language=language)
@@ -232,11 +177,7 @@ Conversation history:
 
 The client said: "{user_input}"
 
-IMPORTANT DELIVERY ADDRESS RULE:
-- NEVER use action "confirm" unless the customer has already provided and confirmed their delivery address
-- If the customer confirms their order details but hasn't provided a delivery address yet, use action "none" and ask for their delivery address
-- Only after collecting and confirming the delivery address should you use action "confirm"
-- The delivery address collection is MANDATORY before final confirmation
+
 
 Reply strictly with a JSON in the following format:
 {{
@@ -316,12 +257,7 @@ Historique de la conversation :
 
 Le client a dit : "{user_input}"
 
-RÈGLE IMPORTANTE POUR L'ADRESSE DE LIVRAISON :
-- N'utilisez JAMAIS l'action "confirm" sauf si le client a déjà fourni et confirmé son adresse de livraison
-- Si le client confirme les détails de sa commande mais n'a pas encore fourni d'adresse de livraison, utilisez l'action "none" et demandez son adresse de livraison
-- Une fois que le client a fourni une adresse ET confirmé cette adresse (en disant "oui", "correct", "exact", etc.), utilisez alors l'action "confirm" pour finaliser la commande
-- La collecte de l'adresse de livraison est OBLIGATOIRE avant la confirmation finale
-- IMPORTANT: Évitez les apostrophes dans vos messages JSON (utilisez "est" au lieu de "cest", "ne" au lieu de "nest", etc.)
+
 
 Répondez strictement avec un JSON dans le format suivant :
 {{
@@ -935,8 +871,7 @@ Status: {order.status}
     def _determine_next_step(self, current_step: str, user_input: str, response: str) -> str:
         step_transitions = {
             "greeting": "confirming_items",
-            "confirming_items": "confirming_address",
-            "confirming_address": "confirming_details",
+            "confirming_items": "confirming_details",
             "modifying_items": "confirming_items",
             "confirming_details": "final_confirmation",
             "final_confirmation": "completed"
@@ -945,12 +880,7 @@ Status: {order.status}
         if current_step == "confirming_items" and any(word in user_input.lower() 
         for word in ["changer", "modifier", "remplacer", "supprimer", "ajouter"]):
             return "modifying_items"
-        # If we just finished confirming items, go to confirming_address
-        if current_step == "confirming_items" and any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
-            return "confirming_address"
-        # If address is confirmed, move to confirming_details
-        if current_step == "confirming_address" and any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
-            return "confirming_details"
+        
         # If confirming details, move to final confirmation
         if current_step == "confirming_details" and any(word in user_input.lower() for word in ["oui", "correct", "ok", "d'accord"]):
             return "final_confirmation"
